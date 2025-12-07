@@ -2,6 +2,14 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import session from "express-session";
+import createMemoryStore from "memorystore";
+
+declare module "express-session" {
+  interface SessionData {
+    userId: string;
+  }
+}
 
 const app = express();
 const httpServer = createServer(app);
@@ -21,6 +29,25 @@ app.use(
 );
 
 app.use(express.urlencoded({ extended: false }));
+
+const MemoryStore = createMemoryStore(session);
+
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || "upriser-dev-secret-key",
+    resave: false,
+    saveUninitialized: false,
+    store: new MemoryStore({
+      checkPeriod: 86400000,
+    }),
+    cookie: {
+      secure: false,
+      httpOnly: true,
+      maxAge: 24 * 60 * 60 * 1000,
+      sameSite: "lax",
+    },
+  })
+);
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
