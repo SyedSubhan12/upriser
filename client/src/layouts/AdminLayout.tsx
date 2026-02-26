@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import {
+  Home,
   LayoutDashboard,
   Layers,
   Users,
@@ -11,7 +12,9 @@ import {
   Moon,
   LogOut,
   GraduationCap,
+  MessageSquare,
 } from "lucide-react";
+
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { Button } from "@/components/ui/button";
@@ -33,11 +36,13 @@ import {
 import { RoleSwitcher } from "@/components/layout/RoleSwitcher";
 
 const MENU_ITEMS = [
+  { title: "Home", url: "/", icon: Home },
   { title: "Dashboard", url: "/admin/dashboard", icon: LayoutDashboard },
   { title: "Boards & Subjects", url: "/admin/boards", icon: Layers },
   { title: "Users", url: "/admin/users", icon: Users },
   { title: "Content Moderation", url: "/admin/moderation", icon: Shield },
   { title: "Analytics", url: "/admin/analytics", icon: BarChart3 },
+  { title: "Feedback", url: "/admin/feedback", icon: MessageSquare },
   { title: "Settings", url: "/admin/settings", icon: Settings },
 ];
 
@@ -46,9 +51,14 @@ interface AdminLayoutProps {
 }
 
 export function AdminLayout({ children }: AdminLayoutProps) {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
+
+  const handleLogout = async () => {
+    await logout();
+    setLocation('/'); // Redirect to home page after logout
+  };
 
   const getInitials = (name: string) => {
     return name
@@ -118,6 +128,18 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                 <RoleSwitcher />
               </div>
             </div>
+            <div className="px-2 pb-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleLogout}
+                className="w-full justify-start"
+                data-testid="button-admin-logout"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                <span className="group-data-[collapsible=icon]:hidden">Logout</span>
+              </Button>
+            </div>
           </SidebarFooter>
         </Sidebar>
         <div className="flex flex-1 flex-col overflow-hidden">
@@ -136,15 +158,6 @@ export function AdminLayout({ children }: AdminLayoutProps) {
                   <Sun className="h-4 w-4" />
                 )}
                 <span className="sr-only">Toggle theme</span>
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={logout}
-                data-testid="button-admin-logout"
-              >
-                <LogOut className="h-4 w-4" />
-                <span className="sr-only">Logout</span>
               </Button>
             </div>
           </header>

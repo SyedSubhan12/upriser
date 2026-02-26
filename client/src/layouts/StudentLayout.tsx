@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import {
+  Home,
   LayoutDashboard,
   BookOpen,
   GraduationCap,
@@ -32,6 +33,7 @@ import {
 import { RoleSwitcher } from "@/components/layout/RoleSwitcher";
 
 const MENU_ITEMS = [
+  { title: "Home", url: "/", icon: Home },
   { title: "Dashboard", url: "/student/dashboard", icon: LayoutDashboard },
   { title: "Study Materials", url: "/student/materials", icon: BookOpen },
   { title: "Practice", url: "/student/practice", icon: GraduationCap },
@@ -45,9 +47,14 @@ interface StudentLayoutProps {
 }
 
 export function StudentLayout({ children }: StudentLayoutProps) {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
+
+  const handleLogout = async () => {
+    await logout();
+    setLocation('/'); // Redirect to home page after logout
+  };
 
   const getInitials = (name: string) => {
     return name
@@ -117,6 +124,18 @@ export function StudentLayout({ children }: StudentLayoutProps) {
                 <RoleSwitcher />
               </div>
             </div>
+            <div className="px-2 pb-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleLogout}
+                className="w-full justify-start"
+                data-testid="button-student-logout"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                <span className="group-data-[collapsible=icon]:hidden">Logout</span>
+              </Button>
+            </div>
           </SidebarFooter>
         </Sidebar>
         <div className="flex flex-1 flex-col overflow-hidden">
@@ -135,15 +154,6 @@ export function StudentLayout({ children }: StudentLayoutProps) {
                   <Sun className="h-4 w-4" />
                 )}
                 <span className="sr-only">Toggle theme</span>
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={logout}
-                data-testid="button-student-logout"
-              >
-                <LogOut className="h-4 w-4" />
-                <span className="sr-only">Logout</span>
               </Button>
             </div>
           </header>

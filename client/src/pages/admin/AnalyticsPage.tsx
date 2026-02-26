@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import {
   Users,
   BookOpen,
@@ -5,19 +6,22 @@ import {
   TrendingUp,
   BarChart3,
   LineChart,
+  Layers,
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { mockUsers, mockMaterials, mockQuizAttempts, mockSubjects } from "@/lib/mockData";
+import { Skeleton } from "@/components/ui/skeleton";
+import { getAdminOverview, type AdminOverviewResponse } from "@/api/admin";
 
 interface StatCardProps {
   title: string;
   value: string | number;
   icon: React.ReactNode;
   change?: string;
+  isLoading?: boolean;
 }
 
-function StatCard({ title, value, icon, change }: StatCardProps) {
+function StatCard({ title, value, icon, change, isLoading }: StatCardProps) {
   return (
     <Card data-testid={`stat-card-${title.toLowerCase().replace(/\s+/g, "-")}`}>
       <CardHeader className="flex flex-row items-center justify-between gap-4 pb-2">
@@ -27,9 +31,13 @@ function StatCard({ title, value, icon, change }: StatCardProps) {
         {icon}
       </CardHeader>
       <CardContent>
-        <div className="text-2xl font-bold" data-testid={`stat-value-${title.toLowerCase().replace(/\s+/g, "-")}`}>
-          {value}
-        </div>
+        {isLoading ? (
+          <Skeleton className="h-8 w-16" />
+        ) : (
+          <div className="text-2xl font-bold" data-testid={`stat-value-${title.toLowerCase().replace(/\s+/g, "-")}`}>
+            {value}
+          </div>
+        )}
         {change && (
           <p className="text-xs text-muted-foreground mt-1">{change}</p>
         )}
@@ -57,24 +65,17 @@ function ChartPlaceholder({ title, icon }: { title: string; icon: React.ReactNod
 }
 
 export function AnalyticsPage() {
-  const totalUsers = mockUsers.length;
-  const totalStudents = mockUsers.filter((u) => u.role === "student").length;
-  const totalMaterials = mockMaterials.length;
-  const totalQuizAttempts = mockQuizAttempts.length;
+  const { data, isLoading } = useQuery<AdminOverviewResponse>({
+    queryKey: ["admin-overview"],
+    queryFn: () => getAdminOverview(),
+  });
 
-  const averageQuizScore =
-    mockQuizAttempts.length > 0
-      ? Math.round(
-          (mockQuizAttempts.reduce((sum, a) => sum + (a.score || 0), 0) /
-            mockQuizAttempts.reduce((sum, a) => sum + (a.totalMarks || 1), 0)) *
-            100
-        )
-      : 0;
+  const stats = data?.stats;
 
-  const subjectUsage = mockSubjects.slice(0, 5).map((subject) => ({
-    name: subject.name,
-    materials: mockMaterials.filter((m) => m.subjectId === subject.id).length,
-  }));
+  const totalStudents = stats?.totalStudents ?? 0;
+  const totalTeachers = stats?.totalTeachers ?? 0;
+  const totalBoards = stats?.totalBoards ?? 0;
+  const totalMaterials = stats?.totalMaterials ?? 0;
 
   return (
     <div className="space-y-6">
@@ -85,28 +86,28 @@ export function AnalyticsPage() {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4" data-testid="stats-grid">
         <StatCard
-          title="Total Users"
-          value={totalUsers}
-          icon={<Users className="h-4 w-4 text-muted-foreground" />}
-          change="+12% from last month"
-        />
-        <StatCard
-          title="Active Students"
+          title="Total Students"
           value={totalStudents}
           icon={<GraduationCap className="h-4 w-4 text-muted-foreground" />}
-          change="+8% from last month"
+          isLoading={isLoading}
         />
         <StatCard
-          title="Content Items"
+          title="Total Teachers"
+          value={totalTeachers}
+          icon={<Users className="h-4 w-4 text-muted-foreground" />}
+          isLoading={isLoading}
+        />
+        <StatCard
+          title="Total Boards"
+          value={totalBoards}
+          icon={<Layers className="h-4 w-4 text-muted-foreground" />}
+          isLoading={isLoading}
+        />
+        <StatCard
+          title="Total Materials"
           value={totalMaterials}
           icon={<BookOpen className="h-4 w-4 text-muted-foreground" />}
-          change="+5 new this week"
-        />
-        <StatCard
-          title="Avg. Quiz Score"
-          value={`${averageQuizScore}%`}
-          icon={<TrendingUp className="h-4 w-4 text-muted-foreground" />}
-          change="+3% from last month"
+          isLoading={isLoading}
         />
       </div>
 
@@ -123,38 +124,8 @@ export function AnalyticsPage() {
 
       <ChartPlaceholder
         title="Active Users Trend"
-        icon={<LineChart className="h-5 w-5 text-muted-foreground" />}
+        icon={<TrendingUp className="h-5 w-5 text-muted-foreground" />}
       />
-
-      <Card data-testid="subject-usage-table">
-        <CardHeader>
-          <CardTitle className="text-lg">Content by Subject</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {subjectUsage.map((subject, index) => (
-              <div key={subject.name} className="flex items-center gap-4" data-testid={`subject-usage-${index}`}>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium">{subject.name}</span>
-                    <span className="text-sm text-muted-foreground">
-                      {subject.materials} items
-                    </span>
-                  </div>
-                  <div className="h-2 rounded-full bg-muted overflow-hidden">
-                    <div
-                      className="h-full bg-primary rounded-full"
-                      style={{
-                        width: `${Math.min((subject.materials / 5) * 100, 100)}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }

@@ -72,11 +72,11 @@ export const mockAnnouncements: Announcement[] = [
 ];
 
 export const mockUsers: User[] = [
-  { id: "student-1", email: "student@demo.com", password: "demo123", name: "Alex Johnson", role: "student", avatar: null, boardIds: ["board-1"], subjectIds: ["subject-1", "subject-2"], isActive: true, createdAt: new Date() },
-  { id: "student-2", email: "student2@demo.com", password: "demo123", name: "Emma Wilson", role: "student", avatar: null, boardIds: ["board-1"], subjectIds: ["subject-1", "subject-3"], isActive: true, createdAt: new Date() },
-  { id: "teacher-1", email: "teacher@demo.com", password: "demo123", name: "Dr. Sarah Smith", role: "teacher", avatar: null, boardIds: ["board-1"], subjectIds: ["subject-1", "subject-2", "subject-3"], isActive: true, createdAt: new Date() },
-  { id: "teacher-2", email: "teacher2@demo.com", password: "demo123", name: "Prof. Michael Brown", role: "teacher", avatar: null, boardIds: ["board-1"], subjectIds: ["subject-4", "subject-5"], isActive: true, createdAt: new Date() },
-  { id: "admin-1", email: "admin@demo.com", password: "demo123", name: "Admin User", role: "admin", avatar: null, boardIds: null, subjectIds: null, isActive: true, createdAt: new Date() },
+  { id: "student-1", email: "student@demo.com", password: "demo123", name: "Alex Johnson", role: "student", avatar: null, boardIds: ["board-1"], subjectIds: ["subject-1", "subject-2"], isActive: true, createdAt: new Date(), googleId: null, authProvider: "local" },
+  { id: "student-2", email: "student2@demo.com", password: "demo123", name: "Emma Wilson", role: "student", avatar: null, boardIds: ["board-1"], subjectIds: ["subject-1", "subject-3"], isActive: true, createdAt: new Date(), googleId: null, authProvider: "local" },
+  { id: "teacher-1", email: "teacher@demo.com", password: "demo123", name: "Dr. Sarah Smith", role: "teacher", avatar: null, boardIds: ["board-1"], subjectIds: ["subject-1", "subject-2", "subject-3"], isActive: true, createdAt: new Date(), googleId: null, authProvider: "local" },
+  { id: "teacher-2", email: "teacher2@demo.com", password: "demo123", name: "Prof. Michael Brown", role: "teacher", avatar: null, boardIds: ["board-1"], subjectIds: ["subject-4", "subject-5"], isActive: true, createdAt: new Date(), googleId: null, authProvider: "local" },
+  { id: "admin-1", email: "admin@demo.com", password: "demo123", name: "Admin User", role: "admin", avatar: null, boardIds: null, subjectIds: null, isActive: true, createdAt: new Date(), googleId: null, authProvider: "local" },
 ];
 
 export function getSubjectsByBoard(boardId: string): Subject[] {

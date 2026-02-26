@@ -16,12 +16,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  mockUsers,
-  mockBoards,
-  mockMaterials,
-} from "@/lib/mockData";
-import type { User, Board, Material } from "@shared/schema";
+import { getAdminOverview, type AdminOverviewResponse } from "@/api/admin";
 
 interface StatCardProps {
   title: string;
@@ -56,106 +51,62 @@ function StatCard({ title, value, icon, description, isLoading }: StatCardProps)
   );
 }
 
-interface SystemEvent {
-  id: string;
-  type: "registration" | "upload" | "flagged";
-  title: string;
-  description: string;
-  date: Date;
-}
-
 export function AdminDashboardPage() {
-  const { data: users = [], isLoading: isLoadingUsers } = useQuery<Omit<User, 'password'>[]>({
-    queryKey: ["/api/users"],
-    queryFn: async () => {
-      const response = await fetch("/api/users", { credentials: "include" });
-      if (!response.ok) throw new Error("Failed to fetch users");
-      return response.json();
-    },
+  const { data, isLoading } = useQuery<AdminOverviewResponse>({
+    queryKey: ["admin-overview"],
+    queryFn: () => getAdminOverview(),
   });
 
-  const { data: boards = [], isLoading: isLoadingBoards } = useQuery<Board[]>({
-    queryKey: ["/api/boards"],
-    queryFn: async () => {
-      const response = await fetch("/api/boards", { credentials: "include" });
-      if (!response.ok) throw new Error("Failed to fetch boards");
-      return response.json();
-    },
-  });
+  const stats = data?.stats;
+  const recentEvents = data?.recentEvents ?? [];
 
-  const { data: materials = [], isLoading: isLoadingMaterials } = useQuery<Material[]>({
-    queryKey: ["/api/materials"],
-    queryFn: async () => {
-      const response = await fetch("/api/materials", { credentials: "include" });
-      if (!response.ok) throw new Error("Failed to fetch materials");
-      return response.json();
-    },
-  });
+  const totalStudents = stats?.totalStudents ?? 0;
+  const totalTeachers = stats?.totalTeachers ?? 0;
+  const totalBoards = stats?.totalBoards ?? 0;
+  const totalMaterials = stats?.totalMaterials ?? 0;
+  const pendingContent = stats?.pendingMaterials ?? 0;
 
-  const usersData = users.length > 0 ? users : mockUsers;
-  const boardsData = boards.length > 0 ? boards : mockBoards;
-  const materialsData = materials.length > 0 ? materials : mockMaterials;
+  const mapEventType = (type: string): "registration" | "upload" | "flagged" | "status" => {
+    // New user signups
+    if (type === "NEW_USER") return "registration";
 
-  const totalStudents = usersData.filter((u) => u.role === "student").length;
-  const totalTeachers = usersData.filter((u) => u.role === "teacher").length;
-  const totalBoards = boardsData.length;
-  const totalMaterials = materialsData.length;
-  const pendingContent = materialsData.filter((m) => m.status === "pending").length;
+    // New resources being created (boards, materials, etc.)
+    if (type.startsWith("NEW_")) return "upload";
 
-  const recentEvents: SystemEvent[] = [
-    {
-      id: "event-1",
-      type: "registration",
-      title: "New Student Registration",
-      description: "Emma Wilson joined as a student",
-      date: new Date(Date.now() - 3600000),
-    },
-    {
-      id: "event-2",
-      type: "upload",
-      title: "New Content Upload",
-      description: "Dr. Sarah Smith uploaded Physics Mid-Term 2022",
-      date: new Date(Date.now() - 7200000),
-    },
-    {
-      id: "event-3",
-      type: "flagged",
-      title: "Content Pending Review",
-      description: "2022 Physics Mid-Term needs moderation",
-      date: new Date(Date.now() - 14400000),
-    },
-    {
-      id: "event-4",
-      type: "registration",
-      title: "New Teacher Registration",
-      description: "Prof. Michael Brown joined as a teacher",
-      date: new Date(Date.now() - 28800000),
-    },
-  ];
+    // Content moderation related events
+    if (type.startsWith("CONTENT_")) return "flagged";
 
-  const getEventIcon = (type: SystemEvent["type"]) => {
-    switch (type) {
+    // Everything else (board/user status changes, deletions, etc.)
+    return "status";
+  };
+
+  const getEventIcon = (type: string) => {
+    const mapped = mapEventType(type);
+    switch (mapped) {
       case "registration":
         return <UserPlus className="h-4 w-4" />;
       case "upload":
         return <Upload className="h-4 w-4" />;
       case "flagged":
         return <AlertTriangle className="h-4 w-4" />;
+      case "status":
+        return <Layers className="h-4 w-4" />;
     }
   };
 
-  const getEventBadge = (type: SystemEvent["type"]) => {
-    switch (type) {
+  const getEventBadge = (type: string) => {
+    const mapped = mapEventType(type);
+    switch (mapped) {
       case "registration":
         return <Badge variant="secondary">New User</Badge>;
       case "upload":
         return <Badge variant="secondary">Upload</Badge>;
       case "flagged":
-        return <Badge variant="destructive">Pending</Badge>;
+        return <Badge variant="destructive">Moderation</Badge>;
+      case "status":
+        return <Badge variant="outline">Status Change</Badge>;
     }
   };
-
-  const isLoading = isLoadingUsers || isLoadingBoards || isLoadingMaterials;
 
   return (
     <div className="space-y-6">
@@ -169,29 +120,29 @@ export function AdminDashboardPage() {
           title="Total Students"
           value={totalStudents}
           icon={<Users className="h-4 w-4 text-muted-foreground" />}
-          isLoading={isLoadingUsers}
+          isLoading={isLoading}
         />
         <StatCard
           title="Total Teachers"
           value={totalTeachers}
           icon={<GraduationCap className="h-4 w-4 text-muted-foreground" />}
-          isLoading={isLoadingUsers}
+          isLoading={isLoading}
         />
         <StatCard
           title="Total Boards"
           value={totalBoards}
           icon={<Layers className="h-4 w-4 text-muted-foreground" />}
-          isLoading={isLoadingBoards}
+          isLoading={isLoading}
         />
         <StatCard
           title="Total Materials"
           value={totalMaterials}
           icon={<FileText className="h-4 w-4 text-muted-foreground" />}
-          isLoading={isLoadingMaterials}
+          isLoading={isLoading}
         />
         <StatCard
           title="Daily Active Users"
-          value="--"
+          value={stats?.dailyActiveUsers ?? "--"}
           icon={<TrendingUp className="h-4 w-4 text-muted-foreground" />}
           description="Coming soon"
         />
@@ -201,7 +152,7 @@ export function AdminDashboardPage() {
         <Card data-testid="recent-events-section">
           <CardHeader className="flex flex-row items-center justify-between gap-4">
             <CardTitle className="text-lg">Recent System Events</CardTitle>
-            {isLoadingMaterials ? (
+            {isLoading ? (
               <Skeleton className="h-6 w-20" />
             ) : (
               <Badge variant="secondary">{pendingContent} pending</Badge>
@@ -232,13 +183,13 @@ export function AdminDashboardPage() {
                       {getEventIcon(event.type)}
                     </div>
                     <div className="flex-1 space-y-1">
-                      <p className="text-sm font-medium">{event.title}</p>
+                      <p className="text-sm font-medium">{event.type}</p>
                       <p className="text-xs text-muted-foreground">
-                        {event.description}
+                        {event.message}
                       </p>
                       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                         <span>
-                          {event.date.toLocaleTimeString([], {
+                          {new Date(event.createdAt).toLocaleTimeString([], {
                             hour: "2-digit",
                             minute: "2-digit",
                           })}

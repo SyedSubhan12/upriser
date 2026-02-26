@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Eye, Check, X, FileText, Video, BookOpen, ClipboardList } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent } from "@/components/ui/card";
@@ -20,22 +21,38 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { mockMaterials, mockUsers, mockSubjects } from "@/lib/mockData";
 import { RESOURCE_TYPE_LABELS, CONTENT_STATUS_LABELS } from "@shared/schema";
-import type { Material, ContentStatus } from "@shared/schema";
+import {
+  listAdminMaterials,
+  approveAdminMaterial,
+  rejectAdminMaterial,
+  type AdminMaterialListResponse,
+  type AdminMaterialSummary,
+} from "@/api/admin";
 
 export function ContentModerationPage() {
-  const [materials, setMaterials] = useState<Material[]>(mockMaterials);
+  const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [previewMaterial, setPreviewMaterial] = useState<Material | null>(null);
+  const [previewMaterial, setPreviewMaterial] = useState<AdminMaterialSummary | null>(null);
+
+  const effectiveStatus =
+    statusFilter === "all" ? "ALL" : (statusFilter.toUpperCase() as "PENDING" | "APPROVED" | "REJECTED");
+
+  const { data, isLoading } = useQuery<AdminMaterialListResponse>({
+    queryKey: ["admin-materials", effectiveStatus],
+    queryFn: () => listAdminMaterials({ status: effectiveStatus }),
+  });
+
+  const materials = data?.data ?? [];
 
   const filteredMaterials = useMemo(() => {
     if (statusFilter === "all") return materials;
-    return materials.filter((m) => m.status === statusFilter);
+    return materials.filter((m) => m.status.toLowerCase() === statusFilter);
   }, [materials, statusFilter]);
 
   const getStatusBadgeVariant = (status: string) => {
-    switch (status) {
+    const normalized = status.toLowerCase();
+    switch (normalized) {
       case "approved":
         return "default";
       case "pending":
@@ -60,37 +77,33 @@ export function ContentModerationPage() {
     }
   };
 
-  const getUploaderName = (uploaderId: string) => {
-    const user = mockUsers.find((u) => u.id === uploaderId);
-    return user?.name || "Unknown";
-  };
+  const approveMutation = useMutation({
+    mutationFn: (id: string) => approveAdminMaterial(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-materials"] });
+    },
+  });
 
-  const getSubjectName = (subjectId: string) => {
-    const subject = mockSubjects.find((s) => s.id === subjectId);
-    return subject?.name || "Unknown";
-  };
+  const rejectMutation = useMutation({
+    mutationFn: (id: string) => rejectAdminMaterial(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-materials"] });
+    },
+  });
 
   const handleApprove = (materialId: string) => {
-    setMaterials((prev) =>
-      prev.map((m) =>
-        m.id === materialId ? { ...m, status: "approved" as ContentStatus } : m
-      )
-    );
+    approveMutation.mutate(materialId);
   };
 
   const handleReject = (materialId: string) => {
-    setMaterials((prev) =>
-      prev.map((m) =>
-        m.id === materialId ? { ...m, status: "rejected" as ContentStatus } : m
-      )
-    );
+    rejectMutation.mutate(materialId);
   };
 
   const statusCounts = {
     all: materials.length,
-    pending: materials.filter((m) => m.status === "pending").length,
-    approved: materials.filter((m) => m.status === "approved").length,
-    rejected: materials.filter((m) => m.status === "rejected").length,
+    pending: materials.filter((m) => m.status === "PENDING").length,
+    approved: materials.filter((m) => m.status === "APPROVED").length,
+    rejected: materials.filter((m) => m.status === "REJECTED").length,
   };
 
   return (
@@ -145,17 +158,17 @@ export function ContentModerationPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {getUploaderName(material.uploaderId)}
+                        {material.uploaderName ?? "Unknown"}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {getSubjectName(material.subjectId)}
+                        {material.subject ?? "Unknown"}
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge
                           variant={getStatusBadgeVariant(material.status)}
                           data-testid={`badge-content-status-${material.id}`}
                         >
-                          {CONTENT_STATUS_LABELS[material.status as keyof typeof CONTENT_STATUS_LABELS] || material.status}
+                          {CONTENT_STATUS_LABELS[material.status.toLowerCase() as keyof typeof CONTENT_STATUS_LABELS] || material.status}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
@@ -168,7 +181,7 @@ export function ContentModerationPage() {
                           >
                             <Eye className="h-4 w-4" />
                           </Button>
-                          {material.status === "pending" && (
+                          {material.status === "PENDING" && (
                             <>
                               <Button
                                 variant="ghost"
@@ -222,11 +235,11 @@ export function ContentModerationPage() {
                 </div>
                 <div>
                   <span className="text-muted-foreground">Subject:</span>
-                  <span className="ml-2">{getSubjectName(previewMaterial.subjectId)}</span>
+                  <span className="ml-2">{previewMaterial.subject ?? "Unknown"}</span>
                 </div>
                 <div>
                   <span className="text-muted-foreground">Uploader:</span>
-                  <span className="ml-2">{getUploaderName(previewMaterial.uploaderId)}</span>
+                  <span className="ml-2">{previewMaterial.uploaderName ?? "Unknown"}</span>
                 </div>
                 <div>
                   <span className="text-muted-foreground">Difficulty:</span>
@@ -235,7 +248,7 @@ export function ContentModerationPage() {
               </div>
               <div>
                 <span className="text-sm text-muted-foreground">Description:</span>
-                <p className="mt-1 text-sm">{previewMaterial.description || "No description provided."}</p>
+                <p className="mt-1 text-sm">Description is not provided by admin summary API; could be loaded on demand if needed.</p>
               </div>
               <div className="rounded-md border p-4 bg-muted/50">
                 <p className="text-sm text-muted-foreground text-center">
@@ -245,7 +258,7 @@ export function ContentModerationPage() {
             </div>
           )}
           <DialogFooter>
-            {previewMaterial?.status === "pending" && (
+            {previewMaterial?.status === "PENDING" && (
               <>
                 <Button
                   variant="outline"

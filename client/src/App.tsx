@@ -5,8 +5,26 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/context/AuthContext";
 import { ThemeProvider } from "@/context/ThemeContext";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { OnboardingGate } from "@/components/onboarding";
+import { FeedbackPopup } from "@/components/FeedbackPopup";
 import NotFound from "@/pages/not-found";
-import { LandingPage } from "@/pages/public/LandingPage";
+
+// PapaCambridge-Style Curriculum Navigation Pages
+import { HomePage } from "@/pages/curriculum/HomePage";
+import { BoardsListPage } from "@/pages/curriculum/BoardsListPage";
+import { BoardDetailPage } from "@/pages/curriculum/BoardDetailPage";
+import { BranchSelectorPage } from "@/pages/curriculum/BranchSelectorPage";
+import { SubjectListPage } from "@/pages/curriculum/SubjectListPage";
+import { IBSubjectGroupPage } from "@/pages/curriculum/IBSubjectGroupPage";
+import { GlobalSubjectsPage } from "@/pages/subjects/SubjectsSearchPage";
+import { SubjectResourceHub } from "@/pages/subject/SubjectResourceHub";
+import { ResourceListPage } from "@/pages/subject/ResourceListPage";
+import { FileBrowserPage } from "@/pages/subject/FileBrowserPage";
+import { PDFViewerPage } from "@/pages/files/PDFViewerPage";
+import { HelpPage } from "@/pages/help/HelpPage";
+
+// Legacy Auth Pages (kept for backward compatibility)
 import { LoginPage } from "@/pages/public/LoginPage";
 import { RegisterPage } from "@/pages/public/RegisterPage";
 import { BoardSelectionPage } from "@/pages/public/BoardSelectionPage";
@@ -41,78 +59,149 @@ import { UserDetailPage } from "@/pages/admin/UserDetailPage";
 import { ContentModerationPage } from "@/pages/admin/ContentModerationPage";
 import { AnalyticsPage } from "@/pages/admin/AnalyticsPage";
 import { SystemSettingsPage } from "@/pages/admin/SystemSettingsPage";
+import { FeedbackPage } from "@/pages/admin/FeedbackPage";
 
 function StudentRoutes() {
   return (
-    <StudentLayout>
-      <Switch>
-        <Route path="/student/dashboard" component={StudentDashboardPage} />
-        <Route path="/student/materials" component={StudyMaterialsPage} />
-        <Route path="/student/materials/:id" component={MaterialDetailPage} />
-        <Route path="/student/practice" component={QuizPracticePage} />
-        <Route path="/student/practice/quiz/:quizId" component={QuizAttemptPage} />
-        <Route path="/student/practice/history" component={QuizHistoryPage} />
-        <Route path="/student/assignments" component={AssignmentsPage} />
-        <Route path="/student/assignments/:id" component={AssignmentDetailPage} />
-        <Route path="/student/announcements" component={AnnouncementsPage} />
-        <Route path="/student/profile" component={ProfilePage} />
-        <Route component={NotFound} />
-      </Switch>
-    </StudentLayout>
+    <ProtectedRoute requiredAuth={true}>
+      <StudentLayout>
+        <Switch>
+          <Route path="/student/dashboard" component={StudentDashboardPage} />
+          <Route path="/student/materials" component={StudyMaterialsPage} />
+          <Route path="/student/materials/:id" component={MaterialDetailPage} />
+          <Route path="/student/practice" component={QuizPracticePage} />
+          <Route path="/student/practice/quiz/:quizId" component={QuizAttemptPage} />
+          <Route path="/student/practice/history" component={QuizHistoryPage} />
+          <Route path="/student/assignments" component={AssignmentsPage} />
+          <Route path="/student/assignments/:id" component={AssignmentDetailPage} />
+          <Route path="/student/announcements" component={AnnouncementsPage} />
+          <Route path="/student/profile" component={ProfilePage} />
+          <Route component={NotFound} />
+        </Switch>
+      </StudentLayout>
+    </ProtectedRoute>
   );
 }
 
 function TeacherRoutes() {
   return (
-    <TeacherLayout>
-      <Switch>
-        <Route path="/teacher/dashboard" component={TeacherDashboardPage} />
-        <Route path="/teacher/materials" component={MyMaterialsPage} />
-        <Route path="/teacher/materials/new" component={MaterialEditorPage} />
-        <Route path="/teacher/materials/:id" component={MaterialEditorPage} />
-        <Route path="/teacher/quizzes" component={QuizListPage} />
-        <Route path="/teacher/quizzes/new" component={QuizBuilderPage} />
-        <Route path="/teacher/quizzes/:id" component={QuizBuilderPage} />
-        <Route path="/teacher/quizzes/:quizId/results" component={QuizResultsPage} />
-        <Route path="/teacher/assignments" component={AssignmentsManagePage} />
-        <Route path="/teacher/assignments/:assignmentId/submissions" component={AssignmentSubmissionsPage} />
-        <Route path="/teacher/announcements" component={TeacherAnnouncementsPage} />
-        <Route component={NotFound} />
-      </Switch>
-    </TeacherLayout>
+    <ProtectedRoute requiredAuth={true}>
+      <TeacherLayout>
+        <Switch>
+          <Route path="/teacher/dashboard" component={TeacherDashboardPage} />
+          <Route path="/teacher/materials" component={MyMaterialsPage} />
+          <Route path="/teacher/materials/new" component={MaterialEditorPage} />
+          <Route path="/teacher/materials/:id" component={MaterialEditorPage} />
+          <Route path="/teacher/quizzes" component={QuizListPage} />
+          <Route path="/teacher/quizzes/new" component={QuizBuilderPage} />
+          <Route path="/teacher/quizzes/:id" component={QuizBuilderPage} />
+          <Route path="/teacher/quizzes/:quizId/results" component={QuizResultsPage} />
+          <Route path="/teacher/assignments" component={AssignmentsManagePage} />
+          <Route path="/teacher/assignments/:assignmentId/submissions" component={AssignmentSubmissionsPage} />
+          <Route path="/teacher/announcements" component={TeacherAnnouncementsPage} />
+          <Route component={NotFound} />
+        </Switch>
+      </TeacherLayout>
+    </ProtectedRoute>
   );
 }
 
 function AdminRoutes() {
   return (
-    <AdminLayout>
-      <Switch>
-        <Route path="/admin/dashboard" component={AdminDashboardPage} />
-        <Route path="/admin/boards" component={BoardsPage} />
-        <Route path="/admin/boards/new" component={BoardEditorPage} />
-        <Route path="/admin/boards/:id" component={BoardEditorPage} />
-        <Route path="/admin/subjects" component={SubjectsTopicsPage} />
-        <Route path="/admin/users" component={UsersPage} />
-        <Route path="/admin/users/:id" component={UserDetailPage} />
-        <Route path="/admin/moderation" component={ContentModerationPage} />
-        <Route path="/admin/analytics" component={AnalyticsPage} />
-        <Route path="/admin/settings" component={SystemSettingsPage} />
-        <Route component={NotFound} />
-      </Switch>
-    </AdminLayout>
+    <ProtectedRoute requiredAuth={true}>
+      <AdminLayout>
+        <Switch>
+          <Route path="/admin/dashboard" component={AdminDashboardPage} />
+          <Route path="/admin/boards" component={BoardsPage} />
+          <Route path="/admin/boards/new" component={BoardEditorPage} />
+          <Route path="/admin/boards/:id" component={BoardEditorPage} />
+          <Route path="/admin/subjects" component={SubjectsTopicsPage} />
+          <Route path="/admin/users" component={UsersPage} />
+          <Route path="/admin/users/:id" component={UserDetailPage} />
+          <Route path="/admin/moderation" component={ContentModerationPage} />
+          <Route path="/admin/analytics" component={AnalyticsPage} />
+          <Route path="/admin/settings" component={SystemSettingsPage} />
+          <Route path="/admin/feedback" component={FeedbackPage} />
+          <Route component={NotFound} />
+        </Switch>
+      </AdminLayout>
+    </ProtectedRoute>
   );
 }
 
 function Router() {
   return (
     <Switch>
-      <Route path="/" component={LandingPage} />
-      <Route path="/login" component={LoginPage} />
-      <Route path="/register" component={RegisterPage} />
+      {/* ========================================= */}
+      {/* PAPACAMBRIDGE-STYLE CURRICULUM NAVIGATION */}
+      {/* Board → Qualification → Subject → Resources */}
+      {/* ========================================= */}
+
+      {/* Home - Entry point with board tiles */}
+      <Route path="/" component={HomePage} />
+      <Route path="/home" component={HomePage} />
+
+      {/* Curriculum - Boards list */}
+      <Route path="/curriculum" component={BoardsListPage} />
+
+      {/* Board Detail - Qualification/Program picker */}
+      <Route path="/curriculum/:boardKey" component={BoardDetailPage} />
+
+      {/* IB DP Subject Groups (must be before generic routes) */}
+      <Route path="/curriculum/ib/dp/groups" component={IBSubjectGroupPage} />
+      <Route path="/curriculum/ib/:programId/:groupId" component={SubjectListPage} />
+
+      {/* Branch Selector - Current vs Legacy (only when needed) */}
+      <Route path="/curriculum/:boardKey/:qualKey/branch" component={BranchSelectorPage} />
+
+      {/* Subject List - No branch */}
+      <Route path="/curriculum/:boardKey/:qualKey/subjects" component={SubjectListPage} />
+
+      {/* Subject List - With branch */}
+      <Route path="/curriculum/:boardKey/:qualKey/:branchKey/subjects" component={SubjectListPage} />
+
+      {/* Global Subjects Search */}
+      <Route path="/subjects" component={GlobalSubjectsPage} />
+
+      {/* Subject Resource Hub */}
+      <Route path="/subject/:subjectId" component={SubjectResourceHub} />
+
+      {/* Resource List (Past Papers, Notes, etc.) */}
+      <Route path="/subject/:subjectId/resource/:resourceKey" component={ResourceListPage} />
+
+      {/* File Browser */}
+      <Route path="/subject/:subjectId/files" component={FileBrowserPage} />
+
+      {/* PDF/File Viewer */}
+      <Route path="/view/file/:fileId" component={PDFViewerPage} />
+
+      {/* Help page */}
+      <Route path="/help" component={HelpPage} />
+
+      {/* ========================================= */}
+      {/* LEGACY AUTH ROUTES (Backward Compat)     */}
+      {/* ========================================= */}
+
+      {/* Auth routes - redirect to dashboard if already logged in */}
+      <Route path="/login">
+        <ProtectedRoute requiredAuth={false}>
+          <LoginPage />
+        </ProtectedRoute>
+      </Route>
+      <Route path="/register">
+        <ProtectedRoute requiredAuth={false}>
+          <RegisterPage />
+        </ProtectedRoute>
+      </Route>
+
+      {/* Board selection (legacy) */}
       <Route path="/boards" component={BoardSelectionPage} />
+
+      {/* Protected routes - require authentication */}
       <Route path="/student/:rest*" component={StudentRoutes} />
       <Route path="/teacher/:rest*" component={TeacherRoutes} />
       <Route path="/admin/:rest*" component={AdminRoutes} />
+
       <Route component={NotFound} />
     </Switch>
   );
@@ -125,7 +214,10 @@ function App() {
         <AuthProvider>
           <TooltipProvider>
             <Toaster />
-            <Router />
+            <FeedbackPopup delayMinutes={2} />
+            <OnboardingGate>
+              <Router />
+            </OnboardingGate>
           </TooltipProvider>
         </AuthProvider>
       </ThemeProvider>

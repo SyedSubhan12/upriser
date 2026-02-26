@@ -1,9 +1,12 @@
+import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
-import { serveStatic } from "./static";
 import { createServer } from "http";
 import session from "express-session";
 import createMemoryStore from "memorystore";
+import cors from "cors";
+import pgSession from "connect-pg-simple";
+import pg from "pg";
 
 declare module "express-session" {
   interface SessionData {
@@ -20,6 +23,12 @@ declare module "http" {
   }
 }
 
+// Allow CORS from the frontend
+app.use(cors({
+  origin: process.env.CLIENT_URL || "http://localhost:5173",
+  credentials: true,
+}));
+
 app.use(
   express.json({
     verify: (req, _res, buf) => {
@@ -31,23 +40,36 @@ app.use(
 app.use(express.urlencoded({ extended: false }));
 
 const MemoryStore = createMemoryStore(session);
+const PgSessionStore = pgSession(session);
+const sessionStore = process.env.DATABASE_URL
+  ? new PgSessionStore({
+    pool: new pg.Pool({ connectionString: process.env.DATABASE_URL }),
+    createTableIfMissing: true,
+  })
+  : new MemoryStore({
+    checkPeriod: 86400000,
+  });
 
 app.use(
   session({
     secret: process.env.SESSION_SECRET || "upriser-dev-secret-key",
     resave: false,
     saveUninitialized: false,
-    store: new MemoryStore({
-      checkPeriod: 86400000,
-    }),
+    store: sessionStore,
     cookie: {
-      secure: false,
+      secure: false, // set to true in production with HTTPS
       httpOnly: true,
-      maxAge: 24 * 60 * 60 * 1000,
       sameSite: "lax",
+      maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
     },
-  })
+  }),
 );
+
+// Initialize Passport for Google OAuth
+import { setupGoogleAuth, passport } from "./auth";
+setupGoogleAuth();
+app.use(passport.initialize());
+app.use(passport.session());
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
@@ -97,20 +119,17 @@ app.use((req, res, next) => {
     throw err;
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
-  if (process.env.NODE_ENV === "production") {
-    serveStatic(app);
-  } else {
+  // Setup Vite or static serving
+  if (app.get("env") === "development") {
     const { setupVite } = await import("./vite");
     await setupVite(httpServer, app);
+  } else {
+    const { serveStatic } = await import("./static");
+    serveStatic(app);
   }
 
   // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
+  // Default to 5000 if not specified.
   const port = parseInt(process.env.PORT || "5000", 10);
   httpServer.listen(
     {

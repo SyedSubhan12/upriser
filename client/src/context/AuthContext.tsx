@@ -10,6 +10,11 @@ interface AuthUser {
   avatar?: string | null;
   boardIds?: string[] | null;
   subjectIds?: string[] | null;
+  password?: string | null;
+  googleId?: string | null;
+  authProvider?: string;
+  isActive?: boolean;
+  createdAt?: Date | null;
 }
 
 interface AuthContextType {
@@ -27,6 +32,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const logout = useCallback(async () => {
+    try {
+      await apiRequest("POST", "/api/auth/logout");
+    } catch {
+      // Ignore errors during logout
+    }
+    setUser(null);
+    localStorage.removeItem("upriser_user");
+  }, []);
+
+  // Check authentication status
   useEffect(() => {
     const checkAuth = async () => {
       try {
@@ -34,15 +50,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (response.ok) {
           const userData = await response.json();
           setUser(userData);
+          localStorage.setItem("upriser_user", JSON.stringify(userData));
         } else {
-          const storedUser = localStorage.getItem("upriser_user");
-          if (storedUser) {
-            try {
-              setUser(JSON.parse(storedUser));
-            } catch {
-              localStorage.removeItem("upriser_user");
-            }
-          }
+          // Any non-OK status (401, 403, etc.) should be treated as logged out
+          setUser(null);
+          localStorage.removeItem("upriser_user");
         }
       } catch {
         const storedUser = localStorage.getItem("upriser_user");
@@ -61,6 +73,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     checkAuth();
   }, []);
 
+  // Poll for user status changes (check if account was deactivated)
+  useEffect(() => {
+    if (!user) return;
+
+    const checkUserStatus = async () => {
+      try {
+        const response = await fetch("/api/auth/me", { credentials: "include" });
+
+        if (response.status === 403) {
+          // Account has been deactivated - force logout
+          console.log("Account deactivated, logging out...");
+          logout();
+        } else if (response.status === 401) {
+          // Session expired or invalid
+          logout();
+        } else if (response.ok) {
+          // Update user data if it changed
+          const userData = await response.json();
+          if (JSON.stringify(userData) !== JSON.stringify(user)) {
+            setUser(userData);
+            localStorage.setItem("upriser_user", JSON.stringify(userData));
+          }
+        }
+      } catch (error) {
+        console.error("Error checking user status:", error);
+      }
+    };
+
+    // Check every 10 seconds for immediate response when account is deactivated
+    const interval = setInterval(checkUserStatus, 10000);
+
+    return () => clearInterval(interval);
+  }, [user, logout]);
+
   const login = useCallback(async (email: string, password: string) => {
     setIsLoading(true);
     try {
@@ -75,15 +121,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const errorMessage = error instanceof Error ? error.message : "Invalid email or password";
       return { success: false, error: errorMessage };
     }
-  }, []);
-
-  const logout = useCallback(async () => {
-    try {
-      await apiRequest("POST", "/api/auth/logout");
-    } catch {
-    }
-    setUser(null);
-    localStorage.removeItem("upriser_user");
   }, []);
 
   const updateUser = useCallback((updates: Partial<AuthUser>) => {

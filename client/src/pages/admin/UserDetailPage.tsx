@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useRoute } from "wouter";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Mail, Calendar, Power } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,18 +15,118 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { mockUsers, mockBoards, mockSubjects } from "@/lib/mockData";
+import { useToast } from "@/hooks/use-toast";
+import {
+  getAdminUser,
+  updateAdminUser,
+  listAdminBoards,
+  listSubjects,
+  type AdminUserSummary,
+  type AdminBoardSummary,
+  type AdminSubject,
+  type UpdateAdminUserBody,
+} from "@/api/admin";
 
 export function UserDetailPage() {
   const [, navigate] = useLocation();
   const [, params] = useRoute("/admin/users/:id");
   const userId = params?.id;
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
 
-  const user = mockUsers.find((u) => u.id === userId);
-  const [role, setRole] = useState(user?.role || "student");
-  const [isActive, setIsActive] = useState(user?.isActive ?? true);
+  const {
+    data: user,
+    isLoading,
+    isError,
+  } = useQuery<AdminUserSummary | null>({
+    queryKey: ["admin-user", userId],
+    queryFn: async () => {
+      if (!userId) return null;
+      return getAdminUser(userId);
+    },
+    enabled: !!userId,
+  });
 
-  if (!user) {
+  const { data: boards = [] } = useQuery<AdminBoardSummary[]>({
+    queryKey: ["admin-boards"],
+    queryFn: () => listAdminBoards(),
+  });
+
+  const { data: subjects = [] } = useQuery<AdminSubject[]>({
+    queryKey: ["admin-subjects"],
+    queryFn: () => listSubjects(),
+  });
+
+  const [role, setRole] = useState<AdminUserSummary["role"]>("student");
+  const [isActive, setIsActive] = useState(true);
+
+  useEffect(() => {
+    if (user) {
+      setRole(user.role);
+      setIsActive(user.status === "ACTIVE");
+    }
+  }, [user]);
+
+  const updateUserMutation = useMutation({
+    mutationFn: (body: UpdateAdminUserBody) => {
+      if (!userId) throw new Error("Missing userId");
+      return updateAdminUser(userId, body);
+    },
+    onSuccess: (updated, variables) => {
+      queryClient.setQueryData(["admin-user", userId], updated);
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+
+      setRole(updated.role);
+      setIsActive(updated.status === "ACTIVE");
+
+      let title = "User updated";
+      let description = "User details have been saved.";
+
+      if (variables?.status) {
+        const activated = variables.status === "ACTIVE";
+        title = activated ? "User Activated" : "User Deactivated";
+        description = `User has been ${activated ? "activated" : "deactivated"}.`;
+      } else if (variables?.role) {
+        title = "Role Updated";
+        description = `User role has been changed to ${updated.role}.`;
+      }
+
+      toast({
+        title,
+        description,
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to update user.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  if (!userId) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="User Not Found" />
+        <p className="text-muted-foreground">No user ID provided.</p>
+        <Button onClick={() => navigate("/admin/users")} data-testid="button-back-to-users">
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to Users
+        </Button>
+      </div>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Loading user..." />
+      </div>
+    );
+  }
+
+  if (isError || !user) {
     return (
       <div className="space-y-6">
         <PageHeader title="User Not Found" />
@@ -49,12 +150,8 @@ export function UserDetailPage() {
       .slice(0, 2);
   };
 
-  const userBoards = mockBoards.filter(
-    (b) => user.boardIds?.includes(b.id)
-  );
-  const userSubjects = mockSubjects.filter(
-    (s) => user.subjectIds?.includes(s.id)
-  );
+  const userBoards = boards.filter((b) => user.boardIds?.includes(b.id));
+  const userSubjects = subjects.filter((s) => user.subjectIds?.includes(s.id));
 
   const activityHistory = [
     { id: "1", action: "Logged in", date: new Date(Date.now() - 3600000) },
@@ -64,7 +161,13 @@ export function UserDetailPage() {
   ];
 
   const handleToggleActive = () => {
-    setIsActive(!isActive);
+    const newStatus: UpdateAdminUserBody["status"] = isActive ? "INACTIVE" : "ACTIVE";
+    updateUserMutation.mutate({ status: newStatus });
+  };
+
+  const handleRoleChange = (newRole: AdminUserSummary["role"]) => {
+    setRole(newRole);
+    updateUserMutation.mutate({ role: newRole });
   };
 
   return (
@@ -101,7 +204,9 @@ export function UserDetailPage() {
               </div>
               <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
                 <Calendar className="h-4 w-4" />
-                <span>Joined {user.createdAt?.toLocaleDateString()}</span>
+                <span>
+                  Joined {new Date(user.createdAt).toLocaleDateString()}
+                </span>
               </div>
               <Badge
                 variant={isActive ? "default" : "secondary"}
@@ -114,7 +219,7 @@ export function UserDetailPage() {
 
             <div className="space-y-2">
               <Label htmlFor="role">User Role</Label>
-              <Select value={role} onValueChange={setRole}>
+              <Select value={role} onValueChange={handleRoleChange}>
                 <SelectTrigger id="role" data-testid="select-user-role">
                   <SelectValue />
                 </SelectTrigger>

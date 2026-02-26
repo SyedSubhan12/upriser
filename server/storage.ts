@@ -1,4 +1,4 @@
-import { 
+import {
   type User, type InsertUser,
   type Board, type InsertBoard,
   type Subject, type InsertSubject,
@@ -9,13 +9,24 @@ import {
   type QuizAttempt, type InsertQuizAttempt,
   type Assignment, type InsertAssignment,
   type Submission, type InsertSubmission,
-  type Announcement, type InsertAnnouncement
+  type Announcement, type InsertAnnouncement,
+  type Qualification, type Branch, type ResourceCategory, type ResourceNode, type FileAsset,
+  type UserProfile, type InsertUserProfile,
+  type UserPreference, type InsertUserPreferences,
+  type UserSubject, type InsertUserSubject,
+  type Feedback, type InsertFeedback,
+  users, boards, subjects, topics, materials, quizzes, questions, quizAttempts, assignments, submissions, announcements,
+  qualifications, branches, subjectGroups, resourceCategories, resourceNodes, fileAssets,
+  userProfiles, userPreferences, userSubjects, feedback
 } from "@shared/schema";
+import { db } from "./db";
+import { eq, and, desc, isNull, sql, count } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
+  getUserByGoogleId(googleId: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, data: Partial<InsertUser>): Promise<User | undefined>;
   getAllUsers(filters?: { role?: string; isActive?: boolean }): Promise<User[]>;
@@ -77,446 +88,599 @@ export interface IStorage {
   createAnnouncement(announcement: InsertAnnouncement): Promise<Announcement>;
   updateAnnouncement(id: string, data: Partial<InsertAnnouncement>): Promise<Announcement | undefined>;
   deleteAnnouncement(id: string): Promise<boolean>;
+
+  // New Curriculum Methods
+  getBoardByKey(key: string): Promise<Board | undefined>;
+  getQualificationsByBoard(boardId: string): Promise<Qualification[]>;
+  getQualificationByKey(boardId: string, key: string): Promise<Qualification | undefined>;
+  getBranchesByQualification(qualId: string): Promise<Branch[]>;
+  getBranchByKey(qualId: string, key: string): Promise<Branch | undefined>;
+  getSubjectsByQualification(qualId: string, branchId?: string): Promise<Subject[]>;
+  getSubjectBySlug(slug: string): Promise<Subject | undefined>;
+  getResourceCategories(): Promise<ResourceCategory[]>;
+  getResourceNodes(subjectId: string, resourceKey: string, parentNodeId?: string | null): Promise<ResourceNode[]>;
+  getFileAsset(fileId: string): Promise<FileAsset | undefined>;
+  getResourceNode(nodeId: string): Promise<ResourceNode | undefined>;
+  getFileAssets(nodeId: string): Promise<FileAsset[]>;
+  getFileAssetsBySubjectAndResource(subjectId: string, resourceKey: string): Promise<FileAsset[]>;
+  getSubjectWithContext(subjectId: string): Promise<any>;
+  getSubjectGroupsByProgram(programId: string): Promise<any[]>;
+
+  // Supabase file management methods
+  createFileAsset(data: any): Promise<FileAsset>;
+  incrementDownloadCount(fileId: string): Promise<void>;
+  getFileAssetByObjectKey(objectKey: string): Promise<FileAsset | undefined>;
+  getFileAssetsPaginated(filters: { subjectId?: string; resourceKey?: string; fileType?: string; year?: number; session?: string }, page: number, limit: number): Promise<{ files: FileAsset[]; total: number }>;
+
+  // Onboarding methods
+  getUserProfileByDeviceId(deviceId: string): Promise<UserProfile | undefined>;
+  createUserProfile(profile: InsertUserProfile): Promise<UserProfile>;
+  updateUserProfile(id: string, data: Partial<InsertUserProfile>): Promise<UserProfile | undefined>;
+  getUserPreferences(profileId: string): Promise<UserPreference | undefined>;
+  upsertUserPreferences(preferences: InsertUserPreferences): Promise<UserPreference>;
+  getUserSubjects(profileId: string): Promise<UserSubject[]>;
+  setUserSubjects(profileId: string, subjectIds: string[]): Promise<void>;
+
+  // Feedback methods
+  getAllFeedback(): Promise<Feedback[]>;
+  createFeedback(feedback: InsertFeedback): Promise<Feedback>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-  private boards: Map<string, Board>;
-  private subjects: Map<string, Subject>;
-  private topics: Map<string, Topic>;
-  private materials: Map<string, Material>;
-  private quizzes: Map<string, Quiz>;
-  private questions: Map<string, Question>;
-  private quizAttempts: Map<string, QuizAttempt>;
-  private assignments: Map<string, Assignment>;
-  private submissions: Map<string, Submission>;
-  private announcements: Map<string, Announcement>;
-
-  constructor() {
-    this.users = new Map();
-    this.boards = new Map();
-    this.subjects = new Map();
-    this.topics = new Map();
-    this.materials = new Map();
-    this.quizzes = new Map();
-    this.questions = new Map();
-    this.quizAttempts = new Map();
-    this.assignments = new Map();
-    this.submissions = new Map();
-    this.announcements = new Map();
-
-    this.seedData();
-  }
-
-  private seedData() {
-    const mockUsers: User[] = [
-      { id: "student-1", email: "student@demo.com", password: "demo123", name: "Alex Johnson", role: "student", avatar: null, boardIds: ["board-1"], subjectIds: ["subject-1", "subject-2"], isActive: true, createdAt: new Date() },
-      { id: "student-2", email: "student2@demo.com", password: "demo123", name: "Emma Wilson", role: "student", avatar: null, boardIds: ["board-1"], subjectIds: ["subject-1", "subject-3"], isActive: true, createdAt: new Date() },
-      { id: "teacher-1", email: "teacher@demo.com", password: "demo123", name: "Dr. Sarah Smith", role: "teacher", avatar: null, boardIds: ["board-1"], subjectIds: ["subject-1", "subject-2", "subject-3"], isActive: true, createdAt: new Date() },
-      { id: "teacher-2", email: "teacher2@demo.com", password: "demo123", name: "Prof. Michael Brown", role: "teacher", avatar: null, boardIds: ["board-1"], subjectIds: ["subject-4", "subject-5"], isActive: true, createdAt: new Date() },
-      { id: "admin-1", email: "admin@demo.com", password: "demo123", name: "Admin User", role: "admin", avatar: null, boardIds: null, subjectIds: null, isActive: true, createdAt: new Date() },
-    ];
-
-    const mockBoards: Board[] = [
-      { id: "board-1", name: "CBSE", code: "CBSE", description: "Central Board of Secondary Education", logo: null, isActive: true, createdAt: new Date() },
-      { id: "board-2", name: "ICSE", code: "ICSE", description: "Indian Certificate of Secondary Education", logo: null, isActive: true, createdAt: new Date() },
-      { id: "board-3", name: "State Board", code: "STATE", description: "State Education Board", logo: null, isActive: true, createdAt: new Date() },
-    ];
-
-    const mockSubjects: Subject[] = [
-      { id: "subject-1", name: "Mathematics", code: "MATH", boardId: "board-1", description: "Mathematics for Class 10", icon: "calculator", isActive: true, createdAt: new Date() },
-      { id: "subject-2", name: "Physics", code: "PHY", boardId: "board-1", description: "Physics for Class 10", icon: "atom", isActive: true, createdAt: new Date() },
-      { id: "subject-3", name: "Chemistry", code: "CHEM", boardId: "board-1", description: "Chemistry for Class 10", icon: "flask", isActive: true, createdAt: new Date() },
-      { id: "subject-4", name: "Biology", code: "BIO", boardId: "board-1", description: "Biology for Class 10", icon: "leaf", isActive: true, createdAt: new Date() },
-      { id: "subject-5", name: "English", code: "ENG", boardId: "board-1", description: "English Literature and Grammar", icon: "book", isActive: true, createdAt: new Date() },
-    ];
-
-    const mockTopics: Topic[] = [
-      { id: "topic-1", name: "Algebra", subjectId: "subject-1", parentId: null, order: 1, description: "Algebraic expressions and equations", isActive: true, createdAt: new Date() },
-      { id: "topic-2", name: "Linear Equations", subjectId: "subject-1", parentId: "topic-1", order: 1, description: "Solving linear equations", isActive: true, createdAt: new Date() },
-      { id: "topic-3", name: "Quadratic Equations", subjectId: "subject-1", parentId: "topic-1", order: 2, description: "Solving quadratic equations", isActive: true, createdAt: new Date() },
-      { id: "topic-4", name: "Geometry", subjectId: "subject-1", parentId: null, order: 2, description: "Shapes and spatial relationships", isActive: true, createdAt: new Date() },
-      { id: "topic-5", name: "Triangles", subjectId: "subject-1", parentId: "topic-4", order: 1, description: "Properties of triangles", isActive: true, createdAt: new Date() },
-      { id: "topic-6", name: "Circles", subjectId: "subject-1", parentId: "topic-4", order: 2, description: "Properties of circles", isActive: true, createdAt: new Date() },
-      { id: "topic-7", name: "Trigonometry", subjectId: "subject-1", parentId: null, order: 3, description: "Trigonometric ratios and identities", isActive: true, createdAt: new Date() },
-      { id: "topic-8", name: "Motion", subjectId: "subject-2", parentId: null, order: 1, description: "Laws of motion", isActive: true, createdAt: new Date() },
-      { id: "topic-9", name: "Forces", subjectId: "subject-2", parentId: null, order: 2, description: "Types of forces", isActive: true, createdAt: new Date() },
-      { id: "topic-10", name: "Chemical Reactions", subjectId: "subject-3", parentId: null, order: 1, description: "Types of chemical reactions", isActive: true, createdAt: new Date() },
-    ];
-
-    const mockMaterials: Material[] = [
-      { id: "mat-1", title: "2023 Mathematics Final Exam", description: "Complete past paper with solutions", type: "past_paper", boardId: "board-1", subjectId: "subject-1", topicId: "topic-1", year: 2023, difficulty: "medium", fileUrl: "/files/math-2023.pdf", videoUrl: null, uploaderId: "teacher-1", status: "approved", viewCount: 245, downloadCount: 89, createdAt: new Date() },
-      { id: "mat-2", title: "Quadratic Equations Notes", description: "Comprehensive notes on solving quadratic equations", type: "notes", boardId: "board-1", subjectId: "subject-1", topicId: "topic-3", year: null, difficulty: "medium", fileUrl: "/files/quadratic-notes.pdf", videoUrl: null, uploaderId: "teacher-1", status: "approved", viewCount: 189, downloadCount: 67, createdAt: new Date() },
-      { id: "mat-3", title: "Trigonometry Video Tutorial", description: "Step-by-step video guide to trigonometric identities", type: "video", boardId: "board-1", subjectId: "subject-1", topicId: "topic-7", year: null, difficulty: "hard", fileUrl: null, videoUrl: "https://example.com/video/trig", uploaderId: "teacher-1", status: "approved", viewCount: 412, downloadCount: 0, createdAt: new Date() },
-      { id: "mat-4", title: "Physics Practice Worksheet", description: "Practice problems on motion and forces", type: "worksheet", boardId: "board-1", subjectId: "subject-2", topicId: "topic-8", year: null, difficulty: "easy", fileUrl: "/files/physics-worksheet.pdf", videoUrl: null, uploaderId: "teacher-1", status: "approved", viewCount: 156, downloadCount: 45, createdAt: new Date() },
-      { id: "mat-5", title: "2022 Physics Mid-Term", description: "Previous year mid-term examination", type: "past_paper", boardId: "board-1", subjectId: "subject-2", topicId: null, year: 2022, difficulty: "medium", fileUrl: "/files/physics-2022.pdf", videoUrl: null, uploaderId: "teacher-1", status: "pending", viewCount: 0, downloadCount: 0, createdAt: new Date() },
-    ];
-
-    const mockQuizzes: Quiz[] = [
-      { id: "quiz-1", title: "Algebra Fundamentals", description: "Test your knowledge of basic algebra", boardId: "board-1", subjectId: "subject-1", topicId: "topic-1", type: "practice", duration: 30, isTimed: true, creatorId: "teacher-1", isActive: true, createdAt: new Date() },
-      { id: "quiz-2", title: "Quadratic Equations Quiz", description: "Practice solving quadratic equations", boardId: "board-1", subjectId: "subject-1", topicId: "topic-3", type: "practice", duration: 20, isTimed: false, creatorId: "teacher-1", isActive: true, createdAt: new Date() },
-      { id: "quiz-3", title: "Physics Mock Test", description: "Full-length mock examination for physics", boardId: "board-1", subjectId: "subject-2", topicId: null, type: "mock", duration: 60, isTimed: true, creatorId: "teacher-1", isActive: true, createdAt: new Date() },
-    ];
-
-    const mockQuestions: Question[] = [
-      { id: "q-1", quizId: "quiz-1", questionText: "What is the value of x if 2x + 5 = 15?", options: ["5", "10", "7", "3"], correctOptionIndex: 0, explanation: "2x + 5 = 15, so 2x = 10, therefore x = 5", order: 1, marks: 1, createdAt: new Date() },
-      { id: "q-2", quizId: "quiz-1", questionText: "Simplify: 3(x + 2) - 2(x - 1)", options: ["x + 8", "x + 4", "5x + 4", "x - 8"], correctOptionIndex: 0, explanation: "3x + 6 - 2x + 2 = x + 8", order: 2, marks: 1, createdAt: new Date() },
-      { id: "q-3", quizId: "quiz-1", questionText: "If a + b = 10 and a - b = 4, find the value of a.", options: ["7", "3", "6", "8"], correctOptionIndex: 0, explanation: "Adding both equations: 2a = 14, so a = 7", order: 3, marks: 1, createdAt: new Date() },
-      { id: "q-4", quizId: "quiz-2", questionText: "Solve: x^2 - 5x + 6 = 0", options: ["x = 2, 3", "x = -2, -3", "x = 1, 6", "x = -1, -6"], correctOptionIndex: 0, explanation: "Factoring: (x-2)(x-3) = 0", order: 1, marks: 2, createdAt: new Date() },
-      { id: "q-5", quizId: "quiz-2", questionText: "The discriminant of x^2 + 4x + 4 = 0 is:", options: ["0", "8", "16", "-8"], correctOptionIndex: 0, explanation: "D = b^2 - 4ac = 16 - 16 = 0", order: 2, marks: 2, createdAt: new Date() },
-    ];
-
-    const mockQuizAttempts: QuizAttempt[] = [
-      { id: "attempt-1", quizId: "quiz-1", userId: "student-1", answers: ["0", "0", "0"], score: 3, totalMarks: 3, startedAt: new Date(Date.now() - 86400000), completedAt: new Date(Date.now() - 86400000 + 1200000), duration: 20 },
-      { id: "attempt-2", quizId: "quiz-2", userId: "student-1", answers: ["0", "1"], score: 2, totalMarks: 4, startedAt: new Date(Date.now() - 172800000), completedAt: new Date(Date.now() - 172800000 + 900000), duration: 15 },
-    ];
-
-    const mockAssignments: Assignment[] = [
-      { id: "assign-1", title: "Algebra Practice Set 1", description: "Complete all problems from Chapter 3", boardId: "board-1", subjectId: "subject-1", topicId: "topic-1", dueDate: new Date(Date.now() + 604800000), totalMarks: 50, creatorId: "teacher-1", attachmentUrl: "/files/algebra-set1.pdf", isActive: true, createdAt: new Date() },
-      { id: "assign-2", title: "Physics Lab Report", description: "Write a detailed report on the motion experiment", boardId: "board-1", subjectId: "subject-2", topicId: "topic-8", dueDate: new Date(Date.now() + 259200000), totalMarks: 30, creatorId: "teacher-1", attachmentUrl: null, isActive: true, createdAt: new Date() },
-      { id: "assign-3", title: "Trigonometry Worksheet", description: "Solve all trigonometric identities", boardId: "board-1", subjectId: "subject-1", topicId: "topic-7", dueDate: new Date(Date.now() - 86400000), totalMarks: 40, creatorId: "teacher-1", attachmentUrl: "/files/trig-worksheet.pdf", isActive: true, createdAt: new Date() },
-    ];
-
-    const mockSubmissions: Submission[] = [
-      { id: "sub-1", assignmentId: "assign-3", studentId: "student-1", fileUrl: "/uploads/student1-trig.pdf", content: null, status: "graded", grade: 35, feedback: "Good work! Review identity #5.", submittedAt: new Date(Date.now() - 172800000), gradedAt: new Date(Date.now() - 86400000) },
-      { id: "sub-2", assignmentId: "assign-1", studentId: "student-1", fileUrl: "/uploads/student1-algebra.pdf", content: null, status: "submitted", grade: null, feedback: null, submittedAt: new Date(), gradedAt: null },
-    ];
-
-    const mockAnnouncements: Announcement[] = [
-      { id: "ann-1", title: "Mid-Term Examination Schedule", content: "The mid-term examinations will begin from next Monday. Please check the detailed schedule on the notice board.", scope: "school", boardId: null, subjectId: null, authorId: "admin-1", isActive: true, createdAt: new Date() },
-      { id: "ann-2", title: "Mathematics Extra Classes", content: "Extra classes for Mathematics will be held every Saturday from 10 AM to 12 PM.", scope: "subject", boardId: "board-1", subjectId: "subject-1", authorId: "teacher-1", isActive: true, createdAt: new Date(Date.now() - 86400000) },
-      { id: "ann-3", title: "Physics Lab Maintenance", content: "The physics lab will be closed for maintenance on Wednesday. All experiments will be rescheduled.", scope: "subject", boardId: "board-1", subjectId: "subject-2", authorId: "teacher-1", isActive: true, createdAt: new Date(Date.now() - 172800000) },
-    ];
-
-    mockUsers.forEach(u => this.users.set(u.id, u));
-    mockBoards.forEach(b => this.boards.set(b.id, b));
-    mockSubjects.forEach(s => this.subjects.set(s.id, s));
-    mockTopics.forEach(t => this.topics.set(t.id, t));
-    mockMaterials.forEach(m => this.materials.set(m.id, m));
-    mockQuizzes.forEach(q => this.quizzes.set(q.id, q));
-    mockQuestions.forEach(q => this.questions.set(q.id, q));
-    mockQuizAttempts.forEach(a => this.quizAttempts.set(a.id, a));
-    mockAssignments.forEach(a => this.assignments.set(a.id, a));
-    mockSubmissions.forEach(s => this.submissions.set(s.id, s));
-    mockAnnouncements.forEach(a => this.announcements.set(a.id, a));
-  }
-
+export class DatabaseStorage implements IStorage {
   async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user;
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(user => user.email === email);
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user;
+  }
+
+  async getUserByGoogleId(googleId: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.googleId, googleId));
+    return user;
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = randomUUID();
-    const user: User = { ...insertUser, id, createdAt: new Date() };
-    this.users.set(id, user);
+    const [user] = await db.insert(users).values({ ...insertUser, id }).returning();
     return user;
   }
 
   async updateUser(id: string, data: Partial<InsertUser>): Promise<User | undefined> {
-    const user = this.users.get(id);
-    if (!user) return undefined;
-    const updated = { ...user, ...data };
-    this.users.set(id, updated);
-    return updated;
+    const [user] = await db.update(users).set(data).where(eq(users.id, id)).returning();
+    return user;
   }
 
   async getAllUsers(filters?: { role?: string; isActive?: boolean }): Promise<User[]> {
-    let users = Array.from(this.users.values());
-    if (filters?.role) {
-      users = users.filter(u => u.role === filters.role);
+    let query = db.select().from(users);
+    // Note: Simple filtering with Drizzle usually requires building the where clause dynamically
+    // For simplicity in this implementation, we'll fetch and filter if complex, 
+    // but for these simple fields we can try to chain.
+    // However, Drizzle query builder is immutable-ish.
+
+    // A better approach for dynamic queries:
+    const conditions = [];
+    if (filters?.role) conditions.push(eq(users.role, filters.role));
+    if (filters?.isActive !== undefined) conditions.push(eq(users.isActive, filters.isActive));
+
+    if (conditions.length > 0) {
+      return await db.select().from(users).where(and(...conditions));
     }
-    if (filters?.isActive !== undefined) {
-      users = users.filter(u => u.isActive === filters.isActive);
-    }
-    return users;
+    return await db.select().from(users);
   }
 
   async getBoard(id: string): Promise<Board | undefined> {
-    return this.boards.get(id);
+    const [board] = await db.select().from(boards).where(eq(boards.id, id));
+    return board;
   }
 
   async getAllBoards(): Promise<Board[]> {
-    return Array.from(this.boards.values());
+    return await db.select().from(boards);
   }
 
   async createBoard(insertBoard: InsertBoard): Promise<Board> {
     const id = randomUUID();
-    const board: Board = { ...insertBoard, id, createdAt: new Date() };
-    this.boards.set(id, board);
+    const [board] = await db.insert(boards).values({ ...insertBoard, id }).returning();
     return board;
   }
 
   async updateBoard(id: string, data: Partial<InsertBoard>): Promise<Board | undefined> {
-    const board = this.boards.get(id);
-    if (!board) return undefined;
-    const updated = { ...board, ...data };
-    this.boards.set(id, updated);
-    return updated;
+    const [board] = await db.update(boards).set(data).where(eq(boards.id, id)).returning();
+    return board;
   }
 
   async getSubject(id: string): Promise<Subject | undefined> {
-    return this.subjects.get(id);
+    const [subject] = await db.select().from(subjects).where(eq(subjects.id, id));
+    return subject;
   }
 
   async getAllSubjects(): Promise<Subject[]> {
-    return Array.from(this.subjects.values());
+    return await db.select().from(subjects);
   }
 
   async getSubjectsByBoard(boardId: string): Promise<Subject[]> {
-    return Array.from(this.subjects.values()).filter(s => s.boardId === boardId);
+    return await db.select().from(subjects).where(eq(subjects.boardId, boardId));
   }
 
   async createSubject(insertSubject: InsertSubject): Promise<Subject> {
     const id = randomUUID();
-    const subject: Subject = { ...insertSubject, id, createdAt: new Date() };
-    this.subjects.set(id, subject);
+    const [subject] = await db.insert(subjects).values({ ...insertSubject, id }).returning();
     return subject;
   }
 
   async updateSubject(id: string, data: Partial<InsertSubject>): Promise<Subject | undefined> {
-    const subject = this.subjects.get(id);
-    if (!subject) return undefined;
-    const updated = { ...subject, ...data };
-    this.subjects.set(id, updated);
-    return updated;
+    const [subject] = await db.update(subjects).set(data).where(eq(subjects.id, id)).returning();
+    return subject;
   }
 
   async getTopic(id: string): Promise<Topic | undefined> {
-    return this.topics.get(id);
+    const [topic] = await db.select().from(topics).where(eq(topics.id, id));
+    return topic;
   }
 
   async getTopicsBySubject(subjectId: string): Promise<Topic[]> {
-    return Array.from(this.topics.values())
-      .filter(t => t.subjectId === subjectId)
-      .sort((a, b) => a.order - b.order);
+    return await db.select().from(topics).where(eq(topics.subjectId, subjectId)).orderBy(topics.order);
   }
 
   async createTopic(insertTopic: InsertTopic): Promise<Topic> {
     const id = randomUUID();
-    const topic: Topic = { ...insertTopic, id, createdAt: new Date() };
-    this.topics.set(id, topic);
+    const [topic] = await db.insert(topics).values({ ...insertTopic, id }).returning();
     return topic;
   }
 
   async updateTopic(id: string, data: Partial<InsertTopic>): Promise<Topic | undefined> {
-    const topic = this.topics.get(id);
-    if (!topic) return undefined;
-    const updated = { ...topic, ...data };
-    this.topics.set(id, updated);
-    return updated;
+    const [topic] = await db.update(topics).set(data).where(eq(topics.id, id)).returning();
+    return topic;
   }
 
   async deleteTopic(id: string): Promise<boolean> {
-    return this.topics.delete(id);
+    const [deleted] = await db.delete(topics).where(eq(topics.id, id)).returning();
+    return !!deleted;
   }
 
   async getMaterial(id: string): Promise<Material | undefined> {
-    return this.materials.get(id);
+    const [material] = await db.select().from(materials).where(eq(materials.id, id));
+    return material;
   }
 
   async getAllMaterials(): Promise<Material[]> {
-    return Array.from(this.materials.values());
+    return await db.select().from(materials);
   }
 
   async getMaterialsByFilters(filters: { boardId?: string; subjectId?: string; topicId?: string; type?: string; status?: string }): Promise<Material[]> {
-    return Array.from(this.materials.values()).filter(m => {
-      if (filters.boardId && m.boardId !== filters.boardId) return false;
-      if (filters.subjectId && m.subjectId !== filters.subjectId) return false;
-      if (filters.topicId && m.topicId !== filters.topicId) return false;
-      if (filters.type && m.type !== filters.type) return false;
-      if (filters.status && m.status !== filters.status) return false;
-      return true;
-    });
+    const conditions = [];
+    if (filters.boardId) conditions.push(eq(materials.boardId, filters.boardId));
+    if (filters.subjectId) conditions.push(eq(materials.subjectId, filters.subjectId));
+    if (filters.topicId) conditions.push(eq(materials.topicId, filters.topicId));
+    if (filters.type) conditions.push(eq(materials.type, filters.type));
+    if (filters.status) conditions.push(eq(materials.status, filters.status));
+
+    if (conditions.length > 0) {
+      return await db.select().from(materials).where(and(...conditions));
+    }
+    return await db.select().from(materials);
   }
 
   async createMaterial(insertMaterial: InsertMaterial): Promise<Material> {
     const id = randomUUID();
-    const material: Material = { ...insertMaterial, id, createdAt: new Date() };
-    this.materials.set(id, material);
+    const [material] = await db.insert(materials).values({ ...insertMaterial, id }).returning();
     return material;
   }
 
   async updateMaterial(id: string, data: Partial<InsertMaterial>): Promise<Material | undefined> {
-    const material = this.materials.get(id);
-    if (!material) return undefined;
-    const updated = { ...material, ...data };
-    this.materials.set(id, updated);
-    return updated;
+    const [material] = await db.update(materials).set(data).where(eq(materials.id, id)).returning();
+    return material;
   }
 
   async getQuiz(id: string): Promise<Quiz | undefined> {
-    return this.quizzes.get(id);
+    const [quiz] = await db.select().from(quizzes).where(eq(quizzes.id, id));
+    return quiz;
   }
 
   async getAllQuizzes(): Promise<Quiz[]> {
-    return Array.from(this.quizzes.values());
+    return await db.select().from(quizzes);
   }
 
-  async getQuizzesByFilters(filters: { boardId?: string; subjectId?: string; topicId?: string; type?: string }): Promise<Quiz[]> {
-    return Array.from(this.quizzes.values()).filter(q => {
-      if (filters.boardId && q.boardId !== filters.boardId) return false;
-      if (filters.subjectId && q.subjectId !== filters.subjectId) return false;
-      if (filters.topicId && q.topicId !== filters.topicId) return false;
-      if (filters.type && q.type !== filters.type) return false;
-      return q.isActive;
-    });
+  async getQuizzesByFilters(filters: { boardId?: string; subjectId?: string; topicId?: string; type?: string; isActive?: boolean }): Promise<Quiz[]> {
+    const conditions = [];
+    if (filters.boardId) conditions.push(eq(quizzes.boardId, filters.boardId));
+    if (filters.subjectId) conditions.push(eq(quizzes.subjectId, filters.subjectId));
+    if (filters.topicId) conditions.push(eq(quizzes.topicId, filters.topicId));
+    if (filters.type) conditions.push(eq(quizzes.type, filters.type));
+    // Only filter by isActive if explicitly specified, default to true for backward compatibility
+    if (filters.isActive !== undefined) {
+      conditions.push(eq(quizzes.isActive, filters.isActive));
+    } else {
+      conditions.push(eq(quizzes.isActive, true));
+    }
+
+    return await db.select().from(quizzes).where(and(...conditions));
   }
 
   async createQuiz(insertQuiz: InsertQuiz): Promise<Quiz> {
     const id = randomUUID();
-    const quiz: Quiz = { ...insertQuiz, id, createdAt: new Date() };
-    this.quizzes.set(id, quiz);
+    const [quiz] = await db.insert(quizzes).values({ ...insertQuiz, id }).returning();
     return quiz;
   }
 
   async updateQuiz(id: string, data: Partial<InsertQuiz>): Promise<Quiz | undefined> {
-    const quiz = this.quizzes.get(id);
-    if (!quiz) return undefined;
-    const updated = { ...quiz, ...data };
-    this.quizzes.set(id, updated);
-    return updated;
+    const [quiz] = await db.update(quizzes).set(data).where(eq(quizzes.id, id)).returning();
+    return quiz;
   }
 
   async getQuestion(id: string): Promise<Question | undefined> {
-    return this.questions.get(id);
+    const [question] = await db.select().from(questions).where(eq(questions.id, id));
+    return question;
   }
 
   async getQuestionsByQuiz(quizId: string): Promise<Question[]> {
-    return Array.from(this.questions.values())
-      .filter(q => q.quizId === quizId)
-      .sort((a, b) => a.order - b.order);
+    return await db.select().from(questions).where(eq(questions.quizId, quizId)).orderBy(questions.order);
   }
 
   async createQuestion(insertQuestion: InsertQuestion): Promise<Question> {
     const id = randomUUID();
-    const question: Question = { ...insertQuestion, id, createdAt: new Date() };
-    this.questions.set(id, question);
+    const [question] = await db.insert(questions).values({ ...insertQuestion, id }).returning();
     return question;
   }
 
   async updateQuestion(id: string, data: Partial<InsertQuestion>): Promise<Question | undefined> {
-    const question = this.questions.get(id);
-    if (!question) return undefined;
-    const updated = { ...question, ...data };
-    this.questions.set(id, updated);
-    return updated;
+    const [question] = await db.update(questions).set(data).where(eq(questions.id, id)).returning();
+    return question;
   }
 
   async deleteQuestion(id: string): Promise<boolean> {
-    return this.questions.delete(id);
+    const [deleted] = await db.delete(questions).where(eq(questions.id, id)).returning();
+    return !!deleted;
   }
 
   async getQuizAttempt(id: string): Promise<QuizAttempt | undefined> {
-    return this.quizAttempts.get(id);
+    const [attempt] = await db.select().from(quizAttempts).where(eq(quizAttempts.id, id));
+    return attempt;
   }
 
   async getQuizAttemptsByUser(userId: string): Promise<QuizAttempt[]> {
-    return Array.from(this.quizAttempts.values()).filter(a => a.userId === userId);
+    return await db.select().from(quizAttempts).where(eq(quizAttempts.userId, userId));
   }
 
   async getQuizAttemptsByQuiz(quizId: string): Promise<QuizAttempt[]> {
-    return Array.from(this.quizAttempts.values()).filter(a => a.quizId === quizId);
+    return await db.select().from(quizAttempts).where(eq(quizAttempts.quizId, quizId));
   }
 
   async createQuizAttempt(insertAttempt: InsertQuizAttempt): Promise<QuizAttempt> {
     const id = randomUUID();
-    const attempt: QuizAttempt = { ...insertAttempt, id };
-    this.quizAttempts.set(id, attempt);
+    const [attempt] = await db.insert(quizAttempts).values({ ...insertAttempt, id }).returning();
     return attempt;
   }
 
   async updateQuizAttempt(id: string, data: Partial<InsertQuizAttempt>): Promise<QuizAttempt | undefined> {
-    const attempt = this.quizAttempts.get(id);
-    if (!attempt) return undefined;
-    const updated = { ...attempt, ...data };
-    this.quizAttempts.set(id, updated);
-    return updated;
+    const [attempt] = await db.update(quizAttempts).set(data).where(eq(quizAttempts.id, id)).returning();
+    return attempt;
   }
 
   async getAssignment(id: string): Promise<Assignment | undefined> {
-    return this.assignments.get(id);
+    const [assignment] = await db.select().from(assignments).where(eq(assignments.id, id));
+    return assignment;
   }
 
   async getAllAssignments(): Promise<Assignment[]> {
-    return Array.from(this.assignments.values());
+    return await db.select().from(assignments);
   }
 
   async createAssignment(insertAssignment: InsertAssignment): Promise<Assignment> {
     const id = randomUUID();
-    const assignment: Assignment = { ...insertAssignment, id, createdAt: new Date() };
-    this.assignments.set(id, assignment);
+    const [assignment] = await db.insert(assignments).values({ ...insertAssignment, id }).returning();
     return assignment;
   }
 
   async updateAssignment(id: string, data: Partial<InsertAssignment>): Promise<Assignment | undefined> {
-    const assignment = this.assignments.get(id);
-    if (!assignment) return undefined;
-    const updated = { ...assignment, ...data };
-    this.assignments.set(id, updated);
-    return updated;
+    const [assignment] = await db.update(assignments).set(data).where(eq(assignments.id, id)).returning();
+    return assignment;
   }
 
   async getSubmission(id: string): Promise<Submission | undefined> {
-    return this.submissions.get(id);
+    const [submission] = await db.select().from(submissions).where(eq(submissions.id, id));
+    return submission;
   }
 
   async getSubmissionsByAssignment(assignmentId: string): Promise<Submission[]> {
-    return Array.from(this.submissions.values()).filter(s => s.assignmentId === assignmentId);
+    return await db.select().from(submissions).where(eq(submissions.assignmentId, assignmentId));
   }
 
   async getSubmissionsByStudent(studentId: string): Promise<Submission[]> {
-    return Array.from(this.submissions.values()).filter(s => s.studentId === studentId);
+    return await db.select().from(submissions).where(eq(submissions.studentId, studentId));
   }
 
   async createSubmission(insertSubmission: InsertSubmission): Promise<Submission> {
     const id = randomUUID();
-    const submission: Submission = { ...insertSubmission, id };
-    this.submissions.set(id, submission);
+    const [submission] = await db.insert(submissions).values({ ...insertSubmission, id }).returning();
     return submission;
   }
 
   async updateSubmission(id: string, data: Partial<InsertSubmission>): Promise<Submission | undefined> {
-    const submission = this.submissions.get(id);
-    if (!submission) return undefined;
-    const updated = { ...submission, ...data };
-    this.submissions.set(id, updated);
-    return updated;
+    const [submission] = await db.update(submissions).set(data).where(eq(submissions.id, id)).returning();
+    return submission;
   }
 
   async getAnnouncement(id: string): Promise<Announcement | undefined> {
-    return this.announcements.get(id);
+    const [announcement] = await db.select().from(announcements).where(eq(announcements.id, id));
+    return announcement;
   }
 
   async getAllAnnouncements(): Promise<Announcement[]> {
-    return Array.from(this.announcements.values()).sort((a, b) => {
-      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return dateB - dateA;
-    });
+    return await db.select().from(announcements).orderBy(desc(announcements.createdAt));
   }
 
   async createAnnouncement(insertAnnouncement: InsertAnnouncement): Promise<Announcement> {
     const id = randomUUID();
-    const announcement: Announcement = { ...insertAnnouncement, id, createdAt: new Date() };
-    this.announcements.set(id, announcement);
+    const [announcement] = await db.insert(announcements).values({ ...insertAnnouncement, id }).returning();
     return announcement;
   }
 
   async updateAnnouncement(id: string, data: Partial<InsertAnnouncement>): Promise<Announcement | undefined> {
-    const announcement = this.announcements.get(id);
-    if (!announcement) return undefined;
-    const updated = { ...announcement, ...data };
-    this.announcements.set(id, updated);
-    return updated;
+    const [announcement] = await db.update(announcements).set(data).where(eq(announcements.id, id)).returning();
+    return announcement;
   }
 
   async deleteAnnouncement(id: string): Promise<boolean> {
-    return this.announcements.delete(id);
+    const [deleted] = await db.delete(announcements).where(eq(announcements.id, id)).returning();
+    return !!deleted;
+  }
+
+  // New Curriculum Implementations
+  async getBoardByKey(key: string): Promise<Board | undefined> {
+    const [board] = await db.select().from(boards).where(eq(boards.boardKey, key));
+    return board;
+  }
+
+  async getQualificationsByBoard(boardId: string): Promise<Qualification[]> {
+    return await db.select().from(qualifications).where(eq(qualifications.boardId, boardId)).orderBy(qualifications.sortOrder);
+  }
+
+  async getQualificationByKey(boardId: string, key: string): Promise<Qualification | undefined> {
+    const [qual] = await db.select().from(qualifications).where(and(eq(qualifications.boardId, boardId), eq(qualifications.qualKey, key)));
+    return qual;
+  }
+
+  async getBranchesByQualification(qualId: string): Promise<Branch[]> {
+    return await db.select().from(branches).where(eq(branches.qualId, qualId));
+  }
+
+  async getBranchByKey(qualId: string, key: string): Promise<Branch | undefined> {
+    const [branch] = await db.select().from(branches).where(and(eq(branches.qualId, qualId), eq(branches.branchKey, key)));
+    return branch;
+  }
+
+  async getSubjectsByQualification(qualId: string, branchId?: string): Promise<Subject[]> {
+    const conditions = [eq(subjects.qualId, qualId)];
+    if (branchId) {
+      conditions.push(eq(subjects.branchId, branchId));
+    } else {
+      // If no branch provided, we check if the qualification has branching.
+      // However, to keep storage clean, we'll just filter by NULL if not provided.
+      // The caller (route) should handle logic if needed.
+    }
+    return await db.select().from(subjects).where(and(...conditions)).orderBy(subjects.sortKey);
+  }
+
+  async getSubjectBySlug(slug: string): Promise<Subject | undefined> {
+    const [subject] = await db.select().from(subjects).where(eq(subjects.slug, slug));
+    return subject;
+  }
+
+  async getResourceCategories(): Promise<ResourceCategory[]> {
+    return await db.select().from(resourceCategories).orderBy(resourceCategories.sortOrder);
+  }
+
+  async getResourceNodes(subjectId: string, resourceKey: string, parentNodeId?: string | null): Promise<ResourceNode[]> {
+    const conditions = [
+      eq(resourceNodes.subjectId, subjectId),
+      eq(resourceNodes.resourceKey, resourceKey)
+    ];
+
+    // Handle parent node filtering
+    if (parentNodeId === undefined || parentNodeId === null) {
+      // Fetch root nodes (where parentNodeId is NULL)
+      conditions.push(isNull(resourceNodes.parentNodeId));
+    } else {
+      // Fetch children of specific parent
+      conditions.push(eq(resourceNodes.parentNodeId, parentNodeId));
+    }
+
+    return await db.select().from(resourceNodes).where(and(...conditions)).orderBy(resourceNodes.sortOrder);
+  }
+
+  async getFileAssets(nodeId: string): Promise<FileAsset[]> {
+    return await db.select().from(fileAssets).where(eq(fileAssets.nodeId, nodeId));
+  }
+
+  async getFileAsset(fileId: string): Promise<FileAsset | undefined> {
+    const [file] = await db.select().from(fileAssets).where(eq(fileAssets.id, fileId));
+    return file;
+  }
+
+  async getResourceNode(nodeId: string): Promise<ResourceNode | undefined> {
+    const [node] = await db.select().from(resourceNodes).where(eq(resourceNodes.id, nodeId));
+    return node;
+  }
+
+  async getSubjectWithContext(subjectId: string): Promise<any> {
+    const subject = await this.getSubject(subjectId);
+    if (!subject) return null;
+
+    const board = await this.getBoard(subject.boardId);
+    const qualification = await db.select().from(qualifications).where(eq(qualifications.id, subject.qualId)).then((res: any[]) => res[0]);
+    const branch = subject.branchId ? await db.select().from(branches).where(eq(branches.id, subject.branchId)).then((res: any[]) => res[0]) : null;
+
+    // Count resources by category
+    const nodes = await db.select().from(resourceNodes).where(eq(resourceNodes.subjectId, subjectId));
+    const counts: Record<string, number> = {};
+    nodes.forEach((node: any) => {
+      counts[node.resourceKey] = (counts[node.resourceKey] || 0) + 1;
+    });
+
+    return {
+      subject,
+      board,
+      qualification,
+      branch,
+      resourceCounts: counts
+    };
+  }
+
+  async getFileAssetsBySubjectAndResource(subjectId: string, resourceKey: string): Promise<FileAsset[]> {
+    return await db.select({
+      id: fileAssets.id,
+      nodeId: fileAssets.nodeId,
+      title: fileAssets.title,
+      fileType: fileAssets.fileType,
+      url: fileAssets.url,
+      fileSize: fileAssets.fileSize,
+      paper: fileAssets.paper,
+      variant: fileAssets.variant,
+      year: fileAssets.year,
+      session: fileAssets.session,
+    })
+      .from(fileAssets)
+      .innerJoin(resourceNodes, eq(fileAssets.nodeId, resourceNodes.id))
+      .where(and(eq(resourceNodes.subjectId, subjectId), eq(resourceNodes.resourceKey, resourceKey)));
+  }
+
+  async getSubjectGroupsByProgram(programId: string): Promise<any[]> {
+    return await db.select().from(subjectGroups).where(eq(subjectGroups.programId, programId));
+  }
+
+  // =============================================
+  // SUPABASE FILE MANAGEMENT METHODS
+  // =============================================
+
+  async createFileAsset(data: any): Promise<FileAsset> {
+    const id = randomUUID();
+    const [created] = await db.insert(fileAssets).values({ ...data, id }).returning();
+    return created;
+  }
+
+  async incrementDownloadCount(fileId: string): Promise<void> {
+    await db.update(fileAssets)
+      .set({ downloadCount: sql`${fileAssets.downloadCount} + 1` })
+      .where(eq(fileAssets.id, fileId));
+  }
+
+  async getFileAssetByObjectKey(objectKey: string): Promise<FileAsset | undefined> {
+    const [file] = await db.select().from(fileAssets).where(eq(fileAssets.objectKey, objectKey));
+    return file;
+  }
+
+  async getFileAssetsPaginated(
+    filters: { subjectId?: string; resourceKey?: string; fileType?: string; year?: number; session?: string },
+    page: number = 1,
+    limit: number = 20
+  ): Promise<{ files: FileAsset[]; total: number }> {
+    const conditions = [];
+    if (filters.subjectId) conditions.push(eq(fileAssets.subjectId, filters.subjectId));
+    if (filters.resourceKey) conditions.push(eq(fileAssets.resourceKey, filters.resourceKey));
+    if (filters.fileType) conditions.push(eq(fileAssets.fileType, filters.fileType));
+    if (filters.year) conditions.push(eq(fileAssets.year, filters.year));
+    if (filters.session) conditions.push(eq(fileAssets.session, filters.session));
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+    const offset = (page - 1) * limit;
+
+    const [totalResult] = await db.select({ value: count() })
+      .from(fileAssets)
+      .where(whereClause);
+
+    const files = await db.select()
+      .from(fileAssets)
+      .where(whereClause)
+      .limit(limit)
+      .offset(offset)
+      .orderBy(desc(fileAssets.createdAt));
+
+    return { files, total: Number(totalResult?.value ?? 0) };
+  }
+
+  // =============================================
+  // ONBOARDING METHODS
+  // =============================================
+
+  async getUserProfileByDeviceId(deviceId: string): Promise<UserProfile | undefined> {
+    const [profile] = await db.select().from(userProfiles).where(eq(userProfiles.deviceId, deviceId));
+    return profile;
+  }
+
+  async createUserProfile(profile: InsertUserProfile): Promise<UserProfile> {
+    const id = randomUUID();
+    const [created] = await db.insert(userProfiles).values({ ...profile, id }).returning();
+    return created;
+  }
+
+  async updateUserProfile(id: string, data: Partial<InsertUserProfile>): Promise<UserProfile | undefined> {
+    const [updated] = await db.update(userProfiles)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(userProfiles.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getUserPreferences(profileId: string): Promise<UserPreference | undefined> {
+    const [prefs] = await db.select().from(userPreferences).where(eq(userPreferences.profileId, profileId));
+    return prefs;
+  }
+
+  async upsertUserPreferences(preferences: InsertUserPreferences): Promise<UserPreference> {
+    // Check if preferences exist for this profile
+    const existing = await this.getUserPreferences(preferences.profileId);
+
+    if (existing) {
+      // Update existing
+      const [updated] = await db.update(userPreferences)
+        .set({ ...preferences, updatedAt: new Date() })
+        .where(eq(userPreferences.profileId, preferences.profileId))
+        .returning();
+      return updated;
+    } else {
+      // Create new
+      const id = randomUUID();
+      const [created] = await db.insert(userPreferences).values({ ...preferences, id }).returning();
+      return created;
+    }
+  }
+
+  async getUserSubjects(profileId: string): Promise<UserSubject[]> {
+    return await db.select().from(userSubjects).where(eq(userSubjects.profileId, profileId));
+  }
+
+  async setUserSubjects(profileId: string, subjectIds: string[]): Promise<void> {
+    // Delete all existing subjects for this profile
+    await db.delete(userSubjects).where(eq(userSubjects.profileId, profileId));
+
+    // Insert new subjects
+    if (subjectIds.length > 0) {
+      const values = subjectIds.map(subjectId => ({
+        id: randomUUID(),
+        profileId,
+        subjectId,
+      }));
+      await db.insert(userSubjects).values(values);
+    }
+  }
+
+  // =============================================
+  // FEEDBACK METHODS
+  // =============================================
+
+  async getAllFeedback(): Promise<Feedback[]> {
+    return await db.select().from(feedback).orderBy(desc(feedback.createdAt));
+  }
+
+  async createFeedback(insertFeedback: InsertFeedback): Promise<Feedback> {
+    const id = randomUUID();
+    const [created] = await db.insert(feedback).values({ ...insertFeedback, id }).returning();
+    return created;
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
+
