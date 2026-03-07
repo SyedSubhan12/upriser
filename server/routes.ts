@@ -8,7 +8,7 @@ import { storage } from "./storage";
 import { db } from "./db";
 import { z } from "zod";
 import { passport } from "./auth";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import { registerAdminRoutes } from "./admin-routes";
 import { registerMcqRoutes } from "./mcq-routes";
 import { requireAuth, requireRole } from "./middleware/rbac";
@@ -1807,10 +1807,10 @@ export async function registerRoutes(
       }
 
       const registration = await storage.getStudentRegistrationByUserId(userId);
-      
-      return res.json({ 
+
+      return res.json({
         hasRegistration: !!registration,
-        registration: registration || null 
+        registration: registration || null
       });
     } catch (error) {
       console.error("Error checking student registration:", error);
@@ -1831,7 +1831,7 @@ export async function registerRoutes(
 
       // Basic validation
       if (!name || !fatherName || !board || !qualifications || !subject || !phoneNumber || !age || !schoolName) {
-        return res.status(400).json({ 
+        return res.status(400).json({
           error: "All fields are required",
           fields: { name, fatherName, board, qualifications, subject, phoneNumber, age, schoolName }
         });
@@ -1850,11 +1850,11 @@ export async function registerRoutes(
       }
 
       // Get client IP address
-      const ipAddress = req.headers['x-forwarded-for'] || 
-                        req.headers['x-real-ip'] || 
-                        req.socket.remoteAddress || 
-                        req.ip || 
-                        null;
+      const ipAddress = req.headers['x-forwarded-for'] ||
+        req.headers['x-real-ip'] ||
+        req.socket.remoteAddress ||
+        req.ip ||
+        null;
 
       // Get user agent
       const userAgent = req.headers['user-agent'] || null;
@@ -1907,12 +1907,12 @@ export async function registerRoutes(
       });
     } catch (error: any) {
       console.error("Error creating student registration:", error);
-      
+
       // Handle duplicate registration error
       if (error?.code === '23505') {
         return res.status(409).json({ error: "Registration already exists for this user" });
       }
-      
+
       return res.status(500).json({ error: "Internal server error" });
     }
   });

@@ -7,11 +7,13 @@ import createMemoryStore from "memorystore";
 import cors from "cors";
 import pgSession from "connect-pg-simple";
 import pg from "pg";
-import bcrypt from "bcrypt";
 import { randomUUID } from "crypto";
 import { eq } from "drizzle-orm";
 import { db, pool } from "./db";
 import { users } from "@shared/schema";
+import { passport } from "./auth";
+import bcrypt from "bcryptjs";
+import { registerAdminRoutes } from "./admin-routes";
 
 declare module "express-session" {
   interface SessionData {
@@ -99,7 +101,7 @@ app.use(
 );
 
 // Initialize Passport for Google OAuth
-import { setupGoogleAuth, passport } from "./auth";
+import { setupGoogleAuth } from "./auth";
 setupGoogleAuth();
 app.use(passport.initialize());
 app.use(passport.session());
@@ -239,6 +241,7 @@ export async function initializeServer() {
 
   log("Registering routes...");
   await registerRoutes(httpServer, app);
+  await registerAdminRoutes(app);
   log("Routes registered.");
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
