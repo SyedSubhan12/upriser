@@ -20,7 +20,7 @@ declare module "express-session" {
 }
 
 export const app = express();
-const httpServer = createServer(app);
+export const httpServer = createServer(app);
 
 declare module "http" {
   interface IncomingMessage {
@@ -159,7 +159,10 @@ app.use((req, res, next) => {
   next();
 });
 
-(async () => {
+let isInitialized = false;
+export async function initializeServer() {
+  if (isInitialized) return;
+
   try {
     const existingAdmin = await db
       .select()
@@ -191,7 +194,7 @@ app.use((req, res, next) => {
         createdAt: new Date(),
       });
     }
-    // Ensure Teacher user exists
+
     const existingTeacher = await db
       .select()
       .from(users)
@@ -231,16 +234,12 @@ app.use((req, res, next) => {
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
-
-    // Log the error but don't re-throw (that would crash the process)
     console.error(`[ERROR] ${status} - ${message}`, err.stack || err);
-
     if (!res.headersSent) {
       res.status(status).json({ message });
     }
   });
 
-  // Setup Vite or static serving
   if (app.get("env") === "development") {
     const { setupVite } = await import("./vite");
     await setupVite(httpServer, app);
@@ -249,18 +248,25 @@ app.use((req, res, next) => {
     serveStatic(app);
   }
 
-  // ONLY serve the app on a port if not in a serverless environment (Vercel)
-  if (process.env.VERCEL !== "1" && process.env.NODE_ENV !== "production") {
-    const port = parseInt(process.env.PORT || "5000", 10);
-    httpServer.listen(
-      {
-        port,
-        host: "0.0.0.0",
-        reusePort: true,
-      },
-      () => {
-        log(`serving on port ${port}`);
-      },
-    );
-  }
-})();
+  isInitialized = true;
+}
+
+// Initial call for non-serverless environments
+if (process.env.VERCEL !== "1") {
+  (async () => {
+    await initializeServer();
+    if (process.env.NODE_ENV !== "production") {
+      const port = parseInt(process.env.PORT || "5000", 10);
+      httpServer.listen(
+        {
+          port,
+          host: "0.0.0.0",
+          reusePort: true,
+        },
+        () => {
+          log(`serving on port ${port}`);
+        },
+      );
+    }
+  })();
+}
