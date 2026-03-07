@@ -11,6 +11,7 @@ import {
   Sun,
   Moon,
   LogOut,
+  Brain,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
@@ -37,6 +38,7 @@ const MENU_ITEMS = [
   { title: "Dashboard", url: "/student/dashboard", icon: LayoutDashboard },
   { title: "Study Materials", url: "/student/materials", icon: BookOpen },
   { title: "Practice", url: "/student/practice", icon: GraduationCap },
+  { title: "MCQ Practice", url: "/student/mcq/practice", icon: Brain },
   { title: "Assignments", url: "/student/assignments", icon: ClipboardList },
   { title: "Announcements", url: "/student/announcements", icon: Bell },
   { title: "Profile", url: "/student/profile", icon: User },

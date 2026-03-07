@@ -218,7 +218,7 @@ export function TeacherDashboardPage() {
                       <div className="flex-1 space-y-1">
                         <p className="text-sm font-medium">{material.title}</p>
                         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                          <span>{subject?.name || "Unknown Subject"}</span>
+                          <span>{subject?.subjectName || "Unknown Subject"}</span>
                           <Badge variant="secondary" className="text-xs">
                             {RESOURCE_TYPE_LABELS[material.type as keyof typeof RESOURCE_TYPE_LABELS] || material.type}
                           </Badge>
@@ -227,8 +227,8 @@ export function TeacherDashboardPage() {
                               material.status === "approved"
                                 ? "default"
                                 : material.status === "pending"
-                                ? "secondary"
-                                : "destructive"
+                                  ? "secondary"
+                                  : "destructive"
                             }
                             className="text-xs"
                           >

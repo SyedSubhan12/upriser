@@ -170,10 +170,8 @@ export function registerAdminRoutes(app: Express) {
         boardIds,
       });
 
-      // TODO: Send email to user with temporary password
-      // For now, log it (in production, send email instead)
-      console.log(`[ADMIN] New user created: ${email} with temporary password: ${tempPassword}`);
-      console.log(`[ADMIN] Please implement email service to send this password to the user.`);
+      // Log user creation without exposing the password
+      console.log(`[ADMIN] New user created: ${email} — temporary password was generated.`);
 
       await createSystemEvent("NEW_USER", `${user.name} joined as a ${user.role}`, {
         userId: user.id,
@@ -183,11 +181,11 @@ export function registerAdminRoutes(app: Express) {
       const boards = await storage.getAllBoards();
       const boardsById = new Map<string, Board>(boards.map((b) => [b.id, b]));
 
-      // Return user info with temporary password (only on creation)
-      // In production, this should be emailed instead
       return res.status(201).json({
         ...mapUserToAdminDto(user, boardsById),
-        tempPassword: tempPassword, // Include temp password in response for admin to share
+        // Only include temp password for admin to securely share with the user
+        // TODO: Replace with email-based password reset flow
+        tempPassword: tempPassword,
       });
     },
   );
@@ -297,10 +295,9 @@ export function registerAdminRoutes(app: Express) {
     async (_req: Request, res: Response) => {
       const boards = await storage.getAllBoards();
       const data = boards.map((b) => ({
-        id: b.id,
+        ...b,
         name: b.displayName,
         code: b.boardKey,
-        description: b.description,
         isActive: b.isEnabled,
       }));
 
@@ -321,7 +318,7 @@ export function registerAdminRoutes(app: Express) {
       const { name, code, description, isEnabled } = parsed.data;
 
       const existingBoards = await storage.getAllBoards();
-      if (existingBoards.some((b) => b.code === code)) {
+      if (existingBoards.some((b) => b.boardKey === code)) {
         return res.status(409).json({ error: "Board with this code already exists" });
       }
 
@@ -337,10 +334,9 @@ export function registerAdminRoutes(app: Express) {
       });
 
       return res.status(201).json({
-        id: board.id,
+        ...board,
         name: board.displayName,
         code: board.boardKey,
-        description: board.description,
         isActive: board.isEnabled,
       });
     },
@@ -383,10 +379,9 @@ export function registerAdminRoutes(app: Express) {
       }
 
       return res.json({
-        id: updated.id,
+        ...updated,
         name: updated.displayName,
         code: updated.boardKey,
-        description: updated.description,
         isActive: updated.isEnabled,
       });
     },
@@ -404,10 +399,9 @@ export function registerAdminRoutes(app: Express) {
 
       if (!existing.isEnabled) {
         return res.json({
-          id: existing.id,
+          ...existing,
           name: existing.displayName,
           code: existing.boardKey,
-          description: existing.description,
           isActive: existing.isEnabled,
         });
       }
@@ -426,10 +420,9 @@ export function registerAdminRoutes(app: Express) {
       });
 
       return res.json({
-        id: updated.id,
+        ...updated,
         name: updated.displayName,
         code: updated.boardKey,
-        description: updated.description,
         isActive: updated.isEnabled,
       });
     },

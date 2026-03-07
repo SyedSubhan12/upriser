@@ -84,10 +84,13 @@ export async function deleteAdminUser(id: string): Promise<AdminUserSummary> {
 
 export interface AdminBoardSummary {
   id: string;
-  name: string;
-  code: string;
+  name: string; // Compatibility
+  displayName: string;
+  code: string; // Compatibility
+  boardKey: string;
   description: string | null;
-  isActive: boolean;
+  isActive: boolean; // Compatibility
+  isEnabled: boolean;
 }
 
 export async function listAdminBoards(): Promise<AdminBoardSummary[]> {
@@ -205,8 +208,10 @@ export async function getAdminOverview(): Promise<AdminOverviewResponse> {
 // Subjects API
 export interface AdminSubject {
   id: string;
-  name: string;
-  code: string;
+  name: string; // Compatibility
+  subjectName: string;
+  code: string; // Compatibility
+  subjectCode: string;
   boardId: string;
   description: string | null;
   icon: string | null;
@@ -298,5 +303,124 @@ export interface FeedbackItem {
 export async function fetchFeedback(): Promise<FeedbackItem[]> {
   const res = await apiRequest("GET", "/api/admin/feedback");
   if (!res.ok) throw new Error("Failed to fetch feedback");
+  return res.json();
+}
+
+// =============================================
+// Resource Management API
+// =============================================
+
+export interface ResourceCategory {
+  id: string;
+  resourceKey: string;
+  label: string;
+  icon: string | null;
+  sortOrder: number;
+}
+
+export interface ResourceNode {
+  id: string;
+  subjectId: string;
+  resourceKey: string;
+  parentNodeId: string | null;
+  title: string;
+  nodeType: string;
+  meta: any;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FileAsset {
+  id: string;
+  subjectId: string;
+  resourceKey: string;
+  nodeId: string;
+  title: string;
+  fileType: string;
+  url: string;
+  fileSize: number | null;
+  paper: number | null;
+  variant: number | null;
+  year: number | null;
+  session: string | null;
+  objectKey: string | null;
+  downloadCount: number | null;
+  isPublic: boolean;
+  createdAt: string;
+}
+
+export async function fetchResourceCategories(): Promise<ResourceCategory[]> {
+  const res = await apiRequest("GET", "/api/curriculum/resource-categories");
+  return res.json();
+}
+
+export async function fetchResourceNodes(
+  subjectId: string,
+  resourceKey: string,
+  parentNodeId?: string | null
+): Promise<ResourceNode[]> {
+  const params = new URLSearchParams();
+  if (parentNodeId) params.set("parentNodeId", parentNodeId);
+  const query = params.toString();
+  const url = `/api/curriculum/subjects/${subjectId}/resource/${resourceKey}/nodes${query ? `?${query}` : ""}`;
+  const res = await apiRequest("GET", url);
+  return res.json();
+}
+
+export async function fetchFilesByNode(nodeId: string): Promise<FileAsset[]> {
+  const res = await apiRequest("GET", `/api/curriculum/nodes/${nodeId}/files`);
+  return res.json();
+}
+
+export async function createResourceNode(body: {
+  subjectId: string;
+  resourceKey: string;
+  parentNodeId?: string | null;
+  title: string;
+  nodeType: string;
+  sortOrder?: number;
+}): Promise<ResourceNode> {
+  const res = await apiRequest("POST", "/api/curriculum/nodes", body);
+  return res.json();
+}
+
+export async function updateResourceNode(
+  nodeId: string,
+  body: Partial<{ title: string; sortOrder: number }>
+): Promise<ResourceNode> {
+  const res = await apiRequest("PATCH", `/api/curriculum/nodes/${nodeId}`, body);
+  return res.json();
+}
+
+export async function deleteResourceNode(nodeId: string): Promise<void> {
+  await apiRequest("DELETE", `/api/curriculum/nodes/${nodeId}`);
+}
+
+export async function deleteFileAsset(fileId: string): Promise<void> {
+  await apiRequest("DELETE", `/api/curriculum/files/${fileId}`);
+}
+
+export async function uploadFileAsset(formData: FormData): Promise<FileAsset> {
+  const res = await fetch("/api/curriculum/files/upload", {
+    method: "POST",
+    body: formData,
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: "Upload failed" }));
+    throw new Error(err.error || "Upload failed");
+  }
+  const data = await res.json();
+  return data.details;
+}
+
+export async function fetchQualifications(boardId: string): Promise<any[]> {
+  const res = await apiRequest("GET", `/api/curriculum/boards/${boardId}/qualifications`);
+  return res.json();
+}
+
+export async function fetchSubjectsByQualification(qualId: string): Promise<any[]> {
+  const res = await apiRequest("GET", `/api/curriculum/qualifications/${qualId}/subjects`);
   return res.json();
 }

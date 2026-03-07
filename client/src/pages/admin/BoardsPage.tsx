@@ -43,12 +43,12 @@ export function BoardsPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingBoard, setEditingBoard] = useState<AdminBoardSummary | null>(null);
   const [formData, setFormData] = useState({
-    name: "",
-    code: "",
+    displayName: "",
+    boardKey: "",
     description: "",
-    isActive: true,
+    isEnabled: true,
   });
-  const [errors, setErrors] = useState<{ name?: string; code?: string }>({});
+  const [errors, setErrors] = useState<{ displayName?: string; boardKey?: string }>({});
 
   const { data: boards = [], isLoading, isError, refetch } = useQuery<AdminBoardSummary[]>({
     queryKey: ["admin-boards"],
@@ -56,16 +56,16 @@ export function BoardsPage() {
   });
 
   const validateForm = (): boolean => {
-    const newErrors: { name?: string; code?: string } = {};
+    const newErrors: { displayName?: string; boardKey?: string } = {};
 
-    if (!formData.name.trim()) {
-      newErrors.name = "Board name is required";
+    if (!formData.displayName.trim()) {
+      newErrors.displayName = "Board name is required";
     }
 
-    if (!formData.code.trim()) {
-      newErrors.code = "Board code is required";
-    } else if (formData.code.length < 2) {
-      newErrors.code = "Code must be at least 2 characters";
+    if (!formData.boardKey.trim()) {
+      newErrors.boardKey = "Board code is required";
+    } else if (formData.boardKey.length < 2) {
+      newErrors.boardKey = "Code must be at least 2 characters";
     }
 
     setErrors(newErrors);
@@ -78,8 +78,8 @@ export function BoardsPage() {
     onSuccess: (updatedBoard) => {
       queryClient.invalidateQueries({ queryKey: ["admin-boards"] });
       toast({
-        title: updatedBoard.isActive ? "Board Activated" : "Board Deactivated",
-        description: `${updatedBoard.name} has been ${updatedBoard.isActive ? "activated" : "deactivated"}.`,
+        title: updatedBoard.isEnabled ? "Board Activated" : "Board Deactivated",
+        description: `${updatedBoard.displayName} has been ${updatedBoard.isEnabled ? "activated" : "deactivated"}.`,
       });
     },
     onError: () => {
@@ -99,30 +99,30 @@ export function BoardsPage() {
     mutationFn: async (values: typeof formData) => {
       if (editingBoard) {
         return updateAdminBoard(editingBoard.id, {
-          name: values.name.trim(),
-          code: values.code.trim(),
+          name: values.displayName.trim(),
+          code: values.boardKey.trim(),
           description: values.description.trim() || null,
-          isActive: values.isActive,
+          isActive: values.isEnabled,
         });
       }
 
       return createAdminBoard({
-        name: values.name.trim(),
-        code: values.code.trim(),
+        name: values.displayName.trim(),
+        code: values.boardKey.trim(),
         description: values.description.trim() || null,
-        isActive: values.isActive,
+        isActive: values.isEnabled,
       });
     },
     onSuccess: (savedBoard) => {
       queryClient.invalidateQueries({ queryKey: ["admin-boards"] });
       setIsDialogOpen(false);
       setEditingBoard(null);
-      setFormData({ name: "", code: "", description: "", isActive: true });
+      setFormData({ displayName: "", boardKey: "", description: "", isEnabled: true });
       setErrors({});
 
       toast({
         title: editingBoard ? "Board Updated" : "Board Created",
-        description: `${savedBoard.name} has been ${editingBoard ? "updated" : "created"} successfully.`,
+        description: `${savedBoard.displayName} has been ${editingBoard ? "updated" : "created"} successfully.`,
       });
     },
     onError: (error: any) => {
@@ -140,7 +140,7 @@ export function BoardsPage() {
       queryClient.invalidateQueries({ queryKey: ["admin-boards"] });
       toast({
         title: "Board Archived",
-        description: `${board.name} has been archived and marked inactive.`,
+        description: `${board.displayName} has been archived and marked inactive.`,
       });
     },
     onError: (error: any) => {
@@ -154,7 +154,7 @@ export function BoardsPage() {
 
   const handleOpenCreate = () => {
     setEditingBoard(null);
-    setFormData({ name: "", code: "", description: "", isActive: true });
+    setFormData({ displayName: "", boardKey: "", description: "", isEnabled: true });
     setErrors({});
     setIsDialogOpen(true);
   };
@@ -162,10 +162,10 @@ export function BoardsPage() {
   const handleOpenEdit = (board: AdminBoardSummary) => {
     setEditingBoard(board);
     setFormData({
-      name: board.name,
-      code: board.code,
+      displayName: board.displayName,
+      boardKey: board.boardKey,
       description: board.description || "",
-      isActive: board.isActive,
+      isEnabled: board.isEnabled,
     });
     setErrors({});
     setIsDialogOpen(true);
@@ -173,7 +173,7 @@ export function BoardsPage() {
 
   const handleDeleteBoard = (board: AdminBoardSummary) => {
     const confirmed = window.confirm(
-      `Are you sure you want to archive "${board.name}"? It will be marked inactive and hidden from users.`,
+      `Are you sure you want to archive "${board.displayName}"? It will be marked inactive and hidden from users.`,
     );
     if (!confirmed) return;
     deleteBoardMutation.mutate(board);
@@ -246,17 +246,17 @@ export function BoardsPage() {
                 boards.map((board) => (
                   <TableRow key={board.id} data-testid={`row-board-${board.id}`}>
                     <TableCell className="font-medium" data-testid={`text-board-name-${board.id}`}>
-                      {board.name}
+                      {board.displayName}
                     </TableCell>
                     <TableCell data-testid={`text-board-code-${board.id}`}>
-                      <Badge variant="outline">{board.code}</Badge>
+                      <Badge variant="outline">{board.boardKey}</Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground max-w-xs truncate">
                       {board.description || "No description"}
                     </TableCell>
                     <TableCell className="text-center">
                       <Switch
-                        checked={board.isActive}
+                        checked={board.isEnabled}
                         onCheckedChange={() => handleToggleActive(board)}
                         disabled={toggleBoardMutation.isPending}
                         data-testid={`switch-board-active-${board.id}`}
@@ -342,31 +342,31 @@ export function BoardsPage() {
               <Label htmlFor="board-name">Board Name</Label>
               <Input
                 id="board-name"
-                value={formData.name}
+                value={formData.displayName}
                 onChange={(e) => {
-                  setFormData((prev) => ({ ...prev, name: e.target.value }));
-                  if (errors.name) setErrors((prev) => ({ ...prev, name: undefined }));
+                  setFormData((prev) => ({ ...prev, displayName: e.target.value }));
+                  if (errors.displayName) setErrors((prev) => ({ ...prev, displayName: undefined }));
                 }}
                 placeholder="e.g., Central Board of Secondary Education"
-                className={errors.name ? "border-destructive" : ""}
+                className={errors.displayName ? "border-destructive" : ""}
               />
-              {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
+              {errors.displayName && <p className="text-xs text-destructive">{errors.displayName}</p>}
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="board-code">Board Code</Label>
               <Input
                 id="board-code"
-                value={formData.code}
+                value={formData.boardKey}
                 onChange={(e) => {
-                  setFormData((prev) => ({ ...prev, code: e.target.value.toUpperCase() }));
-                  if (errors.code) setErrors((prev) => ({ ...prev, code: undefined }));
+                  setFormData((prev) => ({ ...prev, boardKey: e.target.value.toUpperCase() }));
+                  if (errors.boardKey) setErrors((prev) => ({ ...prev, boardKey: undefined }));
                 }}
                 placeholder="e.g., CBSE"
-                className={errors.code ? "border-destructive" : ""}
+                className={errors.boardKey ? "border-destructive" : ""}
               />
-              {errors.code ? (
-                <p className="text-xs text-destructive">{errors.code}</p>
+              {errors.boardKey ? (
+                <p className="text-xs text-destructive">{errors.boardKey}</p>
               ) : (
                 <p className="text-xs text-muted-foreground">A short unique identifier for the board</p>
               )}
@@ -394,9 +394,9 @@ export function BoardsPage() {
               </div>
               <Switch
                 id="board-active"
-                checked={formData.isActive}
+                checked={formData.isEnabled}
                 onCheckedChange={(checked) =>
-                  setFormData((prev) => ({ ...prev, isActive: checked }))
+                  setFormData((prev) => ({ ...prev, isEnabled: checked }))
                 }
               />
             </div>

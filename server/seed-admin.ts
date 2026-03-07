@@ -42,14 +42,17 @@ async function seedAdmin() {
             console.log(`   User ID: ${existingAdmin[0].id}`);
             console.log(`   Role: ${existingAdmin[0].role}`);
 
-            // Update role to admin if it's not already
-            if (existingAdmin[0].role !== "admin") {
-                await db
-                    .update(users)
-                    .set({ role: "admin", isActive: true })
-                    .where(eq(users.id, existingAdmin[0].id));
-                console.log(`✅ Updated user role to admin`);
-            }
+            const hashedPassword = await bcrypt.hash(ADMIN_PASSWORD, 10);
+            await db
+                .update(users)
+                .set({
+                    role: "admin",
+                    isActive: true,
+                    password: hashedPassword,
+                    name: ADMIN_NAME,
+                })
+                .where(eq(users.id, existingAdmin[0].id));
+            console.log(`✅ Updated admin credentials`);
         } else {
             // Create new admin user with generated ID
             const adminId = randomUUID();

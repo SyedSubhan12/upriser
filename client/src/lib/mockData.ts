@@ -1,17 +1,17 @@
 import type { Board, Subject, Topic, Material, Quiz, Question, QuizAttempt, Assignment, Submission, Announcement, User } from "@shared/schema";
 
 export const mockBoards: Board[] = [
-  { id: "board-1", name: "CBSE", code: "CBSE", description: "Central Board of Secondary Education", logo: null, isActive: true, createdAt: new Date() },
-  { id: "board-2", name: "ICSE", code: "ICSE", description: "Indian Certificate of Secondary Education", logo: null, isActive: true, createdAt: new Date() },
-  { id: "board-3", name: "State Board", code: "STATE", description: "State Education Board", logo: null, isActive: true, createdAt: new Date() },
+  { id: "board-1", displayName: "CBSE", boardKey: "CBSE", fullName: "Central Board of Secondary Education", description: "Central Board of Secondary Education", logoUrl: null, isEnabled: true, sortOrder: 1, createdAt: new Date(), updatedAt: new Date() },
+  { id: "board-2", displayName: "ICSE", boardKey: "ICSE", fullName: "Indian Certificate of Secondary Education", description: "Indian Certificate of Secondary Education", logoUrl: null, isEnabled: true, sortOrder: 2, createdAt: new Date(), updatedAt: new Date() },
+  { id: "board-3", displayName: "State Board", boardKey: "STATE", fullName: "State Education Board", description: "State Education Board", logoUrl: null, isEnabled: true, sortOrder: 3, createdAt: new Date(), updatedAt: new Date() },
 ];
 
 export const mockSubjects: Subject[] = [
-  { id: "subject-1", name: "Mathematics", code: "MATH", boardId: "board-1", description: "Mathematics for Class 10", icon: "calculator", isActive: true, createdAt: new Date() },
-  { id: "subject-2", name: "Physics", code: "PHY", boardId: "board-1", description: "Physics for Class 10", icon: "atom", isActive: true, createdAt: new Date() },
-  { id: "subject-3", name: "Chemistry", code: "CHEM", boardId: "board-1", description: "Chemistry for Class 10", icon: "flask", isActive: true, createdAt: new Date() },
-  { id: "subject-4", name: "Biology", code: "BIO", boardId: "board-1", description: "Biology for Class 10", icon: "leaf", isActive: true, createdAt: new Date() },
-  { id: "subject-5", name: "English", code: "ENG", boardId: "board-1", description: "English Literature and Grammar", icon: "book", isActive: true, createdAt: new Date() },
+  { id: "subject-1", subjectName: "Mathematics", subjectCode: "MATH", boardId: "board-1", qualId: "qual-1", branchId: null, description: "Mathematics for Class 10", icon: "calculator", isActive: true, slug: "mathematics", sortKey: "math", versionTag: null, createdAt: new Date(), updatedAt: new Date() },
+  { id: "subject-2", subjectName: "Physics", subjectCode: "PHY", boardId: "board-1", qualId: "qual-1", branchId: null, description: "Physics for Class 10", icon: "atom", isActive: true, slug: "physics", sortKey: "phy", versionTag: null, createdAt: new Date(), updatedAt: new Date() },
+  { id: "subject-3", subjectName: "Chemistry", subjectCode: "CHEM", boardId: "board-1", qualId: "qual-1", branchId: null, description: "Chemistry for Class 10", icon: "flask", isActive: true, slug: "chemistry", sortKey: "chem", versionTag: null, createdAt: new Date(), updatedAt: new Date() },
+  { id: "subject-4", subjectName: "Biology", subjectCode: "BIO", boardId: "board-1", qualId: "qual-1", branchId: null, description: "Biology for Class 10", icon: "leaf", isActive: true, slug: "biology", sortKey: "bio", versionTag: null, createdAt: new Date(), updatedAt: new Date() },
+  { id: "subject-5", subjectName: "English", subjectCode: "ENG", boardId: "board-1", qualId: "qual-1", branchId: null, description: "English Literature and Grammar", icon: "book", isActive: true, slug: "english", sortKey: "eng", versionTag: null, createdAt: new Date(), updatedAt: new Date() },
 ];
 
 export const mockTopics: Topic[] = [

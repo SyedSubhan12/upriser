@@ -158,7 +158,7 @@ export function ProfilePage() {
                       variant="secondary"
                       data-testid={`badge-board-${board.id}`}
                     >
-                      {board.name}
+                      {board.displayName}
                     </Badge>
                   ))}
                 </div>
@@ -186,7 +186,7 @@ export function ProfilePage() {
                       variant="outline"
                       data-testid={`badge-subject-${subject.id}`}
                     >
-                      {subject.name}
+                      {subject.subjectName}
                     </Badge>
                   ))}
                 </div>

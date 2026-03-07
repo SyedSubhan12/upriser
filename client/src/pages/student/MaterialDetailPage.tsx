@@ -172,13 +172,13 @@ export function MaterialDetailPage() {
                 {board && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Board</span>
-                    <span className="font-medium" data-testid="text-board">{board.name}</span>
+                    <span className="font-medium" data-testid="text-board">{board.displayName}</span>
                   </div>
                 )}
                 {subject && (
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Subject</span>
-                    <span className="font-medium" data-testid="text-subject">{subject.name}</span>
+                    <span className="font-medium" data-testid="text-subject">{subject.subjectName}</span>
                   </div>
                 )}
                 {topic && (

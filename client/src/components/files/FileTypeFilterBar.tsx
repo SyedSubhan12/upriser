@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 import { FILE_TYPE_SHORT_LABELS, type FileType } from "@/lib/curriculumData";
 
-const fileTypes: FileType[] = ["qp", "ms", "gt", "er", "in", "ir"];
+const fileTypes: FileType[] = ["qp", "ms", "gt", "er", "in", "ir", "ci", "sf", "pm", "sm", "sp"];
 
 interface FileTypeFilterBarProps {
     selectedType: FileType | null;
@@ -133,6 +133,11 @@ function getTypeButtonStyle(type: FileType): string {
         er: "border-purple-500 bg-purple-500 text-white",
         in: "border-cyan-500 bg-cyan-500 text-white",
         ir: "border-orange-500 bg-orange-500 text-white",
+        ci: "border-rose-500 bg-rose-500 text-white",
+        sf: "border-indigo-500 bg-indigo-500 text-white",
+        pm: "border-teal-500 bg-teal-500 text-white",
+        sm: "border-emerald-500 bg-emerald-500 text-white",
+        sp: "border-sky-500 bg-sky-500 text-white",
         other: "border-gray-500 bg-gray-500 text-white",
     };
     return styles[type];
@@ -152,6 +157,11 @@ export function FileTypeBadge({ type, className }: FileTypeBadgeProps) {
         er: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
         in: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400",
         ir: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
+        ci: "bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400",
+        sf: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400",
+        pm: "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-400",
+        sm: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
+        sp: "bg-sky-100 text-sky-700 dark:bg-sky-900/30 dark:text-sky-400",
         other: "bg-gray-100 text-gray-700 dark:bg-gray-900/30 dark:text-gray-400",
     };
 

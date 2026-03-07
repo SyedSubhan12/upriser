@@ -219,7 +219,7 @@ export function SubjectsTopicsPage() {
       setSubjectForm({ name: "", code: "", description: "", isActive: true });
       toast({
         title: "Subject created",
-        description: `${subject.name} has been created successfully.`,
+        description: `${subject.subjectName} has been created successfully.`,
       });
     },
     onError: (error: any) => {
@@ -244,8 +244,8 @@ export function SubjectsTopicsPage() {
       toast({
         title: isStatusChange ? (subject.isActive ? "Subject activated" : "Subject deactivated") : "Subject updated",
         description: isStatusChange
-          ? `${subject.name} has been ${subject.isActive ? "activated" : "deactivated"}.`
-          : `${subject.name} has been updated successfully.`,
+          ? `${subject.subjectName} has been ${subject.isActive ? "activated" : "deactivated"}.`
+          : `${subject.subjectName} has been updated successfully.`,
       });
     },
     onError: (error: any) => {
@@ -446,9 +446,9 @@ export function SubjectsTopicsPage() {
                   <SelectValue placeholder={isLoadingBoards ? "Loading..." : "Select a board"} />
                 </SelectTrigger>
                 <SelectContent>
-                  {boards.filter(b => b.isActive).map((board) => (
+                  {boards.filter(b => b.isEnabled).map((board) => (
                     <SelectItem key={board.id} value={board.id}>
-                      {board.name}
+                      {board.displayName}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -468,7 +468,7 @@ export function SubjectsTopicsPage() {
                 <SelectContent>
                   {subjects.filter(s => s.isActive).map((subject) => (
                     <SelectItem key={subject.id} value={subject.id}>
-                      {subject.name}
+                      {subject.subjectName}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -502,8 +502,8 @@ export function SubjectsTopicsPage() {
                         data-testid={`subject-row-${subject.id}`}
                       >
                         <div className="flex flex-col">
-                          <span className="font-medium">{subject.name}</span>
-                          <span className="text-[11px] text-muted-foreground">{subject.code}</span>
+                          <span className="font-medium">{subject.subjectName}</span>
+                          <span className="text-[11px] text-muted-foreground">{subject.subjectCode}</span>
                         </div>
                         <div className="flex items-center gap-1">
                           <Button

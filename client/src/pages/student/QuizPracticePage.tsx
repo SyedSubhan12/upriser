@@ -55,7 +55,7 @@ function QuizCard({ quiz, subjects, topics }: QuizCardProps) {
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
-          {subject && <span>{subject.name}</span>}
+          {subject && <span>{subject.subjectName}</span>}
           {topic && (
             <>
               <span>/</span>
@@ -173,7 +173,7 @@ export function QuizPracticePage() {
                     <SelectItem value="all">All Subjects</SelectItem>
                     {subjectsData.map((subject) => (
                       <SelectItem key={subject.id} value={subject.id}>
-                        {subject.name}
+                        {subject.subjectName}
                       </SelectItem>
                     ))}
                   </SelectContent>

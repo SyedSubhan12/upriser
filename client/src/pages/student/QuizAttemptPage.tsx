@@ -157,7 +157,7 @@ export function QuizAttemptPage() {
     mutationFn: async (data: { quizId: string; userId: string }) => {
       const response = await apiRequest("POST", "/api/quiz-attempts", {
         ...data,
-        answers: {},
+        answers: [],
         score: 0,
         totalMarks: 0,
         startedAt: new Date(),
@@ -170,7 +170,7 @@ export function QuizAttemptPage() {
   });
 
   const submitAttemptMutation = useMutation({
-    mutationFn: async (data: { score: number; totalMarks: number; answers: Record<string, string> }) => {
+    mutationFn: async (data: { score: number; totalMarks: number; answers: string[] }) => {
       if (!attemptId) throw new Error("No attempt ID");
       const response = await apiRequest("PATCH", `/api/quiz-attempts/${attemptId}`, {
         ...data,
@@ -294,7 +294,10 @@ export function QuizAttemptPage() {
 
   const handleSubmit = () => {
     const { score, totalMarks } = calculateScore();
-    submitAttemptMutation.mutate({ score, totalMarks, answers });
+    const answersArray = Object.entries(answers).map(([questionId, answer]) =>
+      JSON.stringify({ questionId, answer }),
+    );
+    submitAttemptMutation.mutate({ score, totalMarks, answers: answersArray });
     setIsSubmitted(true);
     setCurrentQuestionIndex(0);
   };

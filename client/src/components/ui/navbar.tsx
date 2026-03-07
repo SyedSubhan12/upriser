@@ -5,6 +5,15 @@ import React from 'react'
 import { cn } from '@/lib/utils'
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
+import {
+    NavigationMenu,
+    NavigationMenuContent,
+    NavigationMenuItem,
+    NavigationMenuLink,
+    NavigationMenuList,
+    NavigationMenuTrigger,
+    navigationMenuTriggerStyle,
+} from "@/components/ui/navigation-menu";
 
 export const Header = () => {
     const [menuState, setMenuState] = React.useState(false)
@@ -13,19 +22,31 @@ export const Header = () => {
     const { theme, toggleTheme } = useTheme();
     const [location, setLocation] = useLocation();
 
-    // Define menu items based on authentication status
-    const publicMenuItems = [
-        { name: 'Features', href: '/#features' },
-    ];
+    const menuItems = user
+        ? [
+            { name: 'Features', href: '/#features' },
+            { name: 'Study Materials', href: '/student/materials' },
+            { name: 'Practice', href: '/student/practice' },
+        ]
+        : [{ name: 'Features', href: '/#features' }];
 
-    const authenticatedMenuItems = [
-        { name: 'Features', href: '/#features' },
-        { name: 'Study Materials', href: '/student/materials' },
-        { name: 'Quizzes', href: '/student/practice' },
+    const exploreLinks = [
+        {
+            title: "Curriculum",
+            href: "/curriculum",
+            description: "Browse boards, qualifications, and subjects",
+        },
+        {
+            title: "Subjects",
+            href: "/subjects",
+            description: "Search across all available subjects",
+        },
+        {
+            title: "Help",
+            href: "/help",
+            description: "Guides and FAQs",
+        },
     ];
-
-    // Use appropriate menu items based on login status
-    const menuItems = user ? authenticatedMenuItems : publicMenuItems;
 
     React.useEffect(() => {
         const handleScroll = () => {
@@ -80,15 +101,56 @@ export const Header = () => {
                         </div>
 
                         <div className="absolute inset-0 m-auto hidden size-fit lg:block">
-                            <ul className="flex gap-8 text-sm">
-                                {menuItems.map((item, index) => (
-                                    <li key={index}>
-                                        <Link href={item.href}>
-                                            <span className="text-muted-foreground hover:text-primary block duration-150 cursor-pointer">{item.name}</span>
-                                        </Link>
-                                    </li>
-                                ))}
-                            </ul>
+                            <NavigationMenu>
+                                <NavigationMenuList className="space-x-2">
+                                    <NavigationMenuItem>
+                                        <NavigationMenuTrigger className="bg-transparent hover:bg-accent/60 data-[state=open]:bg-accent/60">
+                                            Explore
+                                        </NavigationMenuTrigger>
+                                        <NavigationMenuContent>
+                                            <div className="w-[520px] p-4">
+                                                <div className="grid gap-3 md:grid-cols-2">
+                                                    {exploreLinks.map((item) => (
+                                                        <NavigationMenuLink asChild key={item.href}>
+                                                            <Link
+                                                                href={item.href}
+                                                                className={cn(
+                                                                    "block rounded-lg border bg-card p-4 transition-colors",
+                                                                    "hover:bg-accent/60 hover:text-accent-foreground",
+                                                                    "focus:bg-accent/60 focus:text-accent-foreground focus:outline-none"
+                                                                )}
+                                                            >
+                                                                <div className="text-sm font-medium leading-none">{item.title}</div>
+                                                                <p className="mt-1 text-sm text-muted-foreground">
+                                                                    {item.description}
+                                                                </p>
+                                                            </Link>
+                                                        </NavigationMenuLink>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </NavigationMenuContent>
+                                    </NavigationMenuItem>
+
+                                    {menuItems.map((item) => (
+                                        <NavigationMenuItem key={item.href}>
+                                            <NavigationMenuLink asChild>
+                                                <Link
+                                                    href={item.href}
+                                                    className={cn(
+                                                        navigationMenuTriggerStyle(),
+                                                        "bg-transparent",
+                                                        "hover:bg-accent/60",
+                                                        "data-[active]:bg-accent/60"
+                                                    )}
+                                                >
+                                                    {item.name}
+                                                </Link>
+                                            </NavigationMenuLink>
+                                        </NavigationMenuItem>
+                                    ))}
+                                </NavigationMenuList>
+                            </NavigationMenu>
                         </div>
 
 

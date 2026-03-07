@@ -5,13 +5,15 @@ import fs from "fs";
 import multer from "multer";
 
 import { storage } from "./storage";
+import { db } from "./db";
 import { z } from "zod";
 import { passport } from "./auth";
 import bcrypt from "bcrypt";
 import { registerAdminRoutes } from "./admin-routes";
+import { registerMcqRoutes } from "./mcq-routes";
 import { requireAuth, requireRole } from "./middleware/rbac";
 import { authLimiter, apiLimiter } from "./middleware/rate-limit";
-import { uploadPdf, validatePdf, checkDuplicate, buildObjectKey, getPublicUrl, enrichFileWithUrl } from "./supabase-storage";
+import { uploadPdf, validatePdf, checkDuplicate, buildObjectKey, getPublicUrl, enrichFileWithUrl, deleteFile } from "./supabase-storage";
 
 // Configure multer for file uploads (in-memory storage)
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
@@ -30,16 +32,47 @@ import {
   insertUserProfileSchema,
   insertUserPreferencesSchema,
   insertUserSubjectSchema,
-  insertFeedbackSchema
+  insertFeedbackSchema,
+  insertResourceNodeSchema,
+  insertStudentRegistrationSchema
 } from "@shared/schema";
 
 export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  app.use((req, res, next) => {
-    res.setHeader('Content-Type', 'application/json');
-    next();
+  // Content-Type is set per-route (removed global override that broke file serving)
+
+  // Register MCQ system routes (solver, generator, SIE)
+  registerMcqRoutes(app);
+
+  // ============================================================================
+  // HEALTH CHECK ENDPOINT
+  // ============================================================================
+  app.get("/health", async (_req: Request, res: Response) => {
+    const checks: Record<string, any> = {
+      status: "ok",
+      uptime: Math.floor(process.uptime()),
+      timestamp: new Date().toISOString(),
+      memory: {
+        used: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+        total: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
+        unit: "MB",
+      },
+      database: "unknown",
+    };
+
+    try {
+      // Quick DB connectivity check
+      const result = await db.execute(require('drizzle-orm').sql`SELECT 1 as ok`);
+      checks.database = "connected";
+    } catch (err) {
+      checks.database = "error";
+      checks.status = "degraded";
+    }
+
+    const statusCode = checks.status === "ok" ? 200 : 503;
+    return res.status(statusCode).json(checks);
   });
 
   app.post("/api/auth/login", authLimiter, async (req: Request, res: Response) => {
@@ -75,6 +108,61 @@ export async function registerRoutes(
       const { password: _, ...userWithoutPassword } = safeUser;
       return res.json(userWithoutPassword);
     } catch (error) {
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/student/registration", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      const registration = await storage.getStudentRegistrationByUserId(userId);
+      return res.json(registration ?? null);
+    } catch (error) {
+      console.error("Error fetching student registration:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/student/registration", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      const parsed = insertStudentRegistrationSchema.safeParse({
+        ...req.body,
+        userId,
+      });
+
+      if (!parsed.success) {
+        return res.status(400).json({
+          error: "Validation error",
+          issues: parsed.error.issues,
+        });
+      }
+
+      const { userId: _validatedUserId, ...registrationData } = parsed.data;
+
+      const forwarded = req.headers["x-forwarded-for"];
+      const ipAddress = Array.isArray(forwarded)
+        ? forwarded[0]
+        : typeof forwarded === "string"
+          ? forwarded.split(",")[0]?.trim()
+          : req.socket.remoteAddress ?? null;
+
+      const created = await storage.upsertStudentRegistration(userId, {
+        ...registrationData,
+        ipAddress,
+      });
+
+      return res.status(201).json(created);
+    } catch (error) {
+      console.error("Error saving student registration:", error);
       return res.status(500).json({ error: "Internal server error" });
     }
   });
@@ -141,9 +229,17 @@ export async function registerRoutes(
   // Email/password registration
   app.post("/api/auth/register", authLimiter, async (req: Request, res: Response) => {
     try {
-      const { email, password, name, role } = req.body;
+      const { email, password, name } = req.body;
       if (!email || !password || !name) {
         return res.status(400).json({ error: "Email, password, and name are required" });
+      }
+
+      // Password strength validation
+      if (password.length < 8) {
+        return res.status(400).json({ error: "Password must be at least 8 characters long" });
+      }
+      if (!/[A-Z]/.test(password) || !/[a-z]/.test(password) || !/[0-9]/.test(password)) {
+        return res.status(400).json({ error: "Password must contain at least one uppercase letter, one lowercase letter, and one number" });
       }
 
       // Check if user already exists
@@ -153,14 +249,14 @@ export async function registerRoutes(
       }
 
       // Hash password before storing
-      const hashedPassword = await bcrypt.hash(password, 10);
+      const hashedPassword = await bcrypt.hash(password, 12);
 
-      // Create user
+      // Create user — ALWAYS student on self-registration (prevents role escalation)
       const user = await storage.createUser({
         email,
         password: hashedPassword,
         name,
-        role: role || "student",
+        role: "student",
         authProvider: "local",
         isActive: true,
       });
@@ -168,7 +264,11 @@ export async function registerRoutes(
       req.session.userId = user.id;
       const { password: _, ...userWithoutPassword } = user;
       return res.status(201).json(userWithoutPassword);
-    } catch (error) {
+    } catch (error: any) {
+      // Handle race condition: unique constraint violation
+      if (error?.code === '23505') {
+        return res.status(409).json({ error: "User with this email already exists" });
+      }
       return res.status(500).json({ error: "Internal server error" });
     }
   });
@@ -367,21 +467,26 @@ export async function registerRoutes(
 
   app.get("/api/subjects", async (req: Request, res: Response) => {
     try {
-      const { boardId } = req.query;
+      const { boardId, qualId, branchId } = req.query;
       let subjects;
-      if (boardId && typeof boardId === "string") {
+
+      if (qualId && typeof qualId === "string") {
+        subjects = await storage.getSubjectsByQualification(qualId, branchId as string | undefined);
+      } else if (boardId && typeof boardId === "string") {
         subjects = await storage.getSubjectsByBoard(boardId);
       } else {
         subjects = await storage.getAllSubjects();
       }
+
       const data = subjects.map(s => ({
         ...s,
         name: s.subjectName,
         code: s.subjectCode,
-        isActive: s.isActive // ensure this is present
+        isActive: s.isActive
       }));
       return res.json(data);
     } catch (error) {
+      console.error("Error fetching subjects:", error);
       return res.status(500).json({ error: "Internal server error" });
     }
   });
@@ -418,9 +523,39 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/curriculum/branches", async (req: Request, res: Response) => {
+    try {
+      const { qualId } = req.query;
+      if (!qualId || typeof qualId !== "string") {
+        return res.status(400).json({ error: "qualId is required" });
+      }
+      const branches = await storage.getBranchesByQualification(qualId);
+      return res.json(branches);
+    } catch (error) {
+      console.error("Error fetching branches:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/curriculum/qualifications", async (req: Request, res: Response) => {
+    try {
+      const { boardId } = req.query;
+      if (!boardId || typeof boardId !== "string") {
+        return res.status(400).json({ error: "boardId is required" });
+      }
+      const quals = await storage.getQualificationsByBoard(boardId);
+      return res.json(quals);
+    } catch (error) {
+      console.error("Error fetching qualifications:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   app.get("/api/curriculum/boards/:boardKey/qualifications", async (req: Request, res: Response) => {
     try {
-      const board = await storage.getBoardByKey(req.params.boardKey);
+      // Try by ID first (Admin Resource Manager passes the board ID),
+      // then fall back to boardKey lookup (used by the public curriculum routes)
+      const board = (await storage.getBoard(req.params.boardKey)) ?? (await storage.getBoardByKey(req.params.boardKey));
       if (!board) return res.status(404).json({ error: "Board not found" });
 
       const quals = await storage.getQualificationsByBoard(board.id);
@@ -589,7 +724,7 @@ export async function registerRoutes(
     }
   });
 
-  // Serve the raw file content
+  // Serve the raw file content (path traversal protected)
   app.get("/api/curriculum/files/:fileId/raw", async (req: Request, res: Response) => {
     try {
       const file = await storage.getFileAsset(req.params.fileId);
@@ -597,14 +732,24 @@ export async function registerRoutes(
         return res.status(404).json({ error: "File not found" });
       }
 
-      const filePath = path.resolve(process.cwd(), "storage", file.fileName);
+      // Sanitize filename to prevent path traversal attacks
+      const safeFileName = path.basename(file.fileName);
+      const storageDir = path.resolve(process.cwd(), "storage");
+      const filePath = path.resolve(storageDir, safeFileName);
+
+      // Double-check the resolved path is still inside storage directory
+      if (!filePath.startsWith(storageDir)) {
+        console.error(`Path traversal attempt blocked: ${file.fileName}`);
+        return res.status(403).json({ error: "Access denied" });
+      }
+
       if (!fs.existsSync(filePath)) {
         console.error(`File not found on disk: ${filePath}`);
         return res.status(404).json({ error: "File content not found" });
       }
 
       res.setHeader("Content-Type", file.mimeType || "application/pdf");
-      res.setHeader("Content-Disposition", `inline; filename="${file.fileName}"`);
+      res.setHeader("Content-Disposition", `inline; filename="${safeFileName}"`);
       return res.sendFile(filePath);
     } catch (error) {
       console.error("Error serving raw file:", error);
@@ -617,7 +762,7 @@ export async function registerRoutes(
   // ============================================================================
 
   // Upload a single PDF file
-  app.post("/api/curriculum/files/upload", apiLimiter, upload.single('file'), async (req: Request, res: Response) => {
+  app.post("/api/curriculum/files/upload", apiLimiter, requireAuth, requireRole("admin"), upload.single('file'), async (req: Request, res: Response) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: 'No file provided' });
@@ -631,9 +776,12 @@ export async function registerRoutes(
 
       const { subjectId, resourceKey, nodeId, fileType, year, session, paper, variant, title, boardKey, qualKey, subjectSlug } = req.body;
 
-      if (!subjectId || !resourceKey || !nodeId || !fileType) {
-        return res.status(400).json({ error: 'subjectId, resourceKey, nodeId, and fileType are required' });
+      if (!subjectId || !resourceKey || !nodeId) {
+        return res.status(400).json({ error: 'subjectId, resourceKey, and nodeId are required' });
       }
+
+      // Default file type when not explicitly provided by the client
+      const resolvedFileType = fileType || 'other';
 
       // Build object key for Supabase Storage
       const objectKey = buildObjectKey({
@@ -667,7 +815,7 @@ export async function registerRoutes(
         fileName: req.file.originalname,
         mimeType: req.file.mimetype,
         fileSize: req.file.size,
-        fileType,
+        fileType: resolvedFileType,
         year: year ? parseInt(year) : null,
         session: session || null,
         paper: paper ? parseInt(paper) : null,
@@ -775,6 +923,24 @@ export async function registerRoutes(
     }
   });
 
+  // Delete a subject (Admin only)
+  app.delete("/api/subjects/:id", apiLimiter, requireAuth, requireRole("admin"), async (req: Request, res: Response) => {
+    try {
+      const subject = await storage.getSubject(req.params.id);
+      if (!subject) {
+        return res.status(404).json({ error: "Subject not found" });
+      }
+      const deleted = await storage.deleteSubject(req.params.id);
+      if (!deleted) {
+        return res.status(500).json({ error: "Failed to delete subject" });
+      }
+      return res.json({ message: "Subject deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting subject:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   app.get("/api/topics", async (req: Request, res: Response) => {
     try {
       const { subjectId } = req.query;
@@ -788,7 +954,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/topics", async (req: Request, res: Response) => {
+  app.post("/api/topics", requireAuth, requireRole("teacher"), async (req: Request, res: Response) => {
     try {
       const parsed = insertTopicSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -802,7 +968,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/topics/:id", async (req: Request, res: Response) => {
+  app.patch("/api/topics/:id", requireAuth, requireRole("teacher"), async (req: Request, res: Response) => {
     try {
       const topic = await storage.updateTopic(req.params.id, req.body);
       if (!topic) {
@@ -814,7 +980,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/topics/:id", async (req: Request, res: Response) => {
+  app.delete("/api/topics/:id", requireAuth, requireRole("admin"), async (req: Request, res: Response) => {
     try {
       const deleted = await storage.deleteTopic(req.params.id);
       if (!deleted) {
@@ -855,7 +1021,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/materials", async (req: Request, res: Response) => {
+  app.post("/api/materials", requireAuth, async (req: Request, res: Response) => {
     try {
       const parsed = insertMaterialSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -922,7 +1088,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/quizzes", async (req: Request, res: Response) => {
+  app.post("/api/quizzes", requireAuth, requireRole("teacher"), async (req: Request, res: Response) => {
     try {
       const parsed = insertQuizSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -936,7 +1102,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/quizzes/:id", async (req: Request, res: Response) => {
+  app.patch("/api/quizzes/:id", requireAuth, requireRole("teacher"), async (req: Request, res: Response) => {
     try {
       const quiz = await storage.updateQuiz(req.params.id, req.body);
       if (!quiz) {
@@ -957,7 +1123,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/quizzes/:quizId/questions", async (req: Request, res: Response) => {
+  app.post("/api/quizzes/:quizId/questions", requireAuth, requireRole("teacher"), async (req: Request, res: Response) => {
     try {
       const questionData = { ...req.body, quizId: req.params.quizId };
       const parsed = insertQuestionSchema.safeParse(questionData);
@@ -972,7 +1138,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/questions/:id", async (req: Request, res: Response) => {
+  app.patch("/api/questions/:id", requireAuth, requireRole("teacher"), async (req: Request, res: Response) => {
     try {
       const question = await storage.updateQuestion(req.params.id, req.body);
       if (!question) {
@@ -984,7 +1150,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/questions/:id", async (req: Request, res: Response) => {
+  app.delete("/api/questions/:id", requireAuth, requireRole("teacher"), async (req: Request, res: Response) => {
     try {
       const deleted = await storage.deleteQuestion(req.params.id);
       if (!deleted) {
@@ -996,7 +1162,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/quiz-attempts", async (req: Request, res: Response) => {
+  app.get("/api/quiz-attempts", requireAuth, async (req: Request, res: Response) => {
     try {
       const { userId, quizId } = req.query;
       let attempts;
@@ -1013,7 +1179,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/quiz-attempts/:id", async (req: Request, res: Response) => {
+  app.get("/api/quiz-attempts/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const attempt = await storage.getQuizAttempt(req.params.id);
       if (!attempt) {
@@ -1025,7 +1191,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/quiz-attempts", async (req: Request, res: Response) => {
+  app.post("/api/quiz-attempts", requireAuth, async (req: Request, res: Response) => {
     try {
       const parsed = insertQuizAttemptSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -1039,7 +1205,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/quiz-attempts/:id", async (req: Request, res: Response) => {
+  app.patch("/api/quiz-attempts/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const attempt = await storage.updateQuizAttempt(req.params.id, req.body);
       if (!attempt) {
@@ -1051,7 +1217,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/assignments", async (_req: Request, res: Response) => {
+  app.get("/api/assignments", requireAuth, async (_req: Request, res: Response) => {
     try {
       const assignments = await storage.getAllAssignments();
       return res.json(assignments);
@@ -1060,7 +1226,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/assignments/:id", async (req: Request, res: Response) => {
+  app.get("/api/assignments/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const assignment = await storage.getAssignment(req.params.id);
       if (!assignment) {
@@ -1072,7 +1238,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/assignments", async (req: Request, res: Response) => {
+  app.post("/api/assignments", requireAuth, requireRole("teacher"), async (req: Request, res: Response) => {
     try {
       const parsed = insertAssignmentSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -1086,7 +1252,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/assignments/:id", async (req: Request, res: Response) => {
+  app.patch("/api/assignments/:id", requireAuth, requireRole("teacher"), async (req: Request, res: Response) => {
     try {
       const assignment = await storage.updateAssignment(req.params.id, req.body);
       if (!assignment) {
@@ -1098,7 +1264,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/assignments/:assignmentId/submissions", async (req: Request, res: Response) => {
+  app.get("/api/assignments/:assignmentId/submissions", requireAuth, async (req: Request, res: Response) => {
     try {
       const submissions = await storage.getSubmissionsByAssignment(req.params.assignmentId);
       return res.json(submissions);
@@ -1107,7 +1273,7 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/submissions/:id", async (req: Request, res: Response) => {
+  app.get("/api/submissions/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const submission = await storage.getSubmission(req.params.id);
       if (!submission) {
@@ -1119,7 +1285,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/submissions", async (req: Request, res: Response) => {
+  app.post("/api/submissions", requireAuth, async (req: Request, res: Response) => {
     try {
       const parsed = insertSubmissionSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -1133,7 +1299,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/submissions/:id", async (req: Request, res: Response) => {
+  app.patch("/api/submissions/:id", requireAuth, requireRole("teacher"), async (req: Request, res: Response) => {
     try {
       const submission = await storage.updateSubmission(req.params.id, req.body);
       if (!submission) {
@@ -1154,7 +1320,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/announcements", async (req: Request, res: Response) => {
+  app.post("/api/announcements", requireAuth, requireRole("teacher"), async (req: Request, res: Response) => {
     try {
       const parsed = insertAnnouncementSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -1168,7 +1334,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/announcements/:id", async (req: Request, res: Response) => {
+  app.patch("/api/announcements/:id", requireAuth, requireRole("teacher"), async (req: Request, res: Response) => {
     try {
       const announcement = await storage.updateAnnouncement(req.params.id, req.body);
       if (!announcement) {
@@ -1180,7 +1346,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/announcements/:id", async (req: Request, res: Response) => {
+  app.delete("/api/announcements/:id", requireAuth, requireRole("admin"), async (req: Request, res: Response) => {
     try {
       const deleted = await storage.deleteAnnouncement(req.params.id);
       if (!deleted) {
@@ -1192,7 +1358,8 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/users", async (req: Request, res: Response) => {
+  // User listing — admin only
+  app.get("/api/users", requireAuth, requireRole("admin"), async (req: Request, res: Response) => {
     try {
       const { role, isActive } = req.query;
       const filters: { role?: string; isActive?: boolean } = {};
@@ -1207,8 +1374,13 @@ export async function registerRoutes(
     }
   });
 
-  app.get("/api/users/:id", async (req: Request, res: Response) => {
+  // Get user by ID — authenticated users can only access their own profile
+  app.get("/api/users/:id", requireAuth, async (req: Request, res: Response) => {
     try {
+      // Only allow users to view their own profile, or admins to view any
+      if (req.user!.id !== req.params.id && req.user!.role !== "admin") {
+        return res.status(403).json({ error: "Access denied" });
+      }
       const user = await storage.getUser(req.params.id);
       if (!user) {
         return res.status(404).json({ error: "User not found" });
@@ -1220,8 +1392,19 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/users/:id", async (req: Request, res: Response) => {
+  // Update user — users can only update their own profile (limited fields), admins can update any
+  app.patch("/api/users/:id", requireAuth, async (req: Request, res: Response) => {
     try {
+      // Non-admin users can only update their own profile
+      if (req.user!.id !== req.params.id && req.user!.role !== "admin") {
+        return res.status(403).json({ error: "Access denied" });
+      }
+
+      // Non-admin users cannot change their own role
+      if (req.user!.role !== "admin" && req.body.role) {
+        return res.status(403).json({ error: "Cannot change your own role" });
+      }
+
       const user = await storage.updateUser(req.params.id, req.body);
       if (!user) {
         return res.status(404).json({ error: "User not found" });
@@ -1233,7 +1416,8 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/users", async (req: Request, res: Response) => {
+  // Create user — admin only
+  app.post("/api/users", requireAuth, requireRole("admin"), async (req: Request, res: Response) => {
     try {
       const parsed = insertUserSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -1417,19 +1601,26 @@ export async function registerRoutes(
   // FEEDBACK ROUTES
   // ============================================================================
 
-  // Submit feedback
-  app.post("/api/feedback", async (req: Request, res: Response) => {
+  // Submit feedback — rate limited but allows anonymous submissions
+  app.post("/api/feedback", apiLimiter, async (req: Request, res: Response) => {
     try {
       const parsed = insertFeedbackSchema.safeParse(req.body);
       if (!parsed.success) {
         return res.status(400).json({ error: parsed.error.message });
       }
 
-      // If user is logged in, use their ID
-      if (req.user) {
-        parsed.data.userId = req.user.id;
-        parsed.data.userName = req.user.name;
-        parsed.data.userEmail = req.user.email;
+      // If user is logged in (via session), attach their info
+      if (req.session?.userId) {
+        try {
+          const user = await storage.getUser(req.session.userId);
+          if (user) {
+            parsed.data.userId = user.id;
+            parsed.data.userName = user.name;
+            parsed.data.userEmail = user.email;
+          }
+        } catch {
+          // If user lookup fails, proceed without user info
+        }
       }
 
       const feedback = await storage.createFeedback(parsed.data);
@@ -1450,6 +1641,315 @@ export async function registerRoutes(
       return res.status(500).json({ error: "Internal server error" });
     }
   });
+
+  // =============================================
+  // ADMIN RESOURCE MANAGEMENT ENDPOINTS
+  // =============================================
+
+  // Delete a board (Admin only)
+  app.delete("/api/boards/:id", apiLimiter, requireAuth, requireRole("admin"), async (req: Request, res: Response) => {
+    try {
+      const board = await storage.getBoard(req.params.id);
+      if (!board) {
+        return res.status(404).json({ error: "Board not found" });
+      }
+      const deleted = await storage.deleteBoard(req.params.id);
+      if (!deleted) {
+        return res.status(500).json({ error: "Failed to delete board" });
+      }
+      return res.json({ message: "Board deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting board:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Delete a file asset (Admin only) — removes from DB and Supabase Storage
+  app.delete("/api/curriculum/files/:fileId", apiLimiter, requireAuth, requireRole("admin"), async (req: Request, res: Response) => {
+    try {
+      const file = await storage.getFileAsset(req.params.fileId);
+      if (!file) {
+        return res.status(404).json({ error: "File not found" });
+      }
+
+      // Delete from Supabase Storage if object key exists
+      if (file.objectKey) {
+        const storageDeleted = await deleteFile(file.objectKey);
+        if (!storageDeleted) {
+          console.warn(`Warning: Failed to delete file from storage: ${file.objectKey}`);
+        }
+      }
+
+      // Delete from database
+      const deleted = await storage.deleteFileAsset(req.params.fileId);
+      if (!deleted) {
+        return res.status(500).json({ error: "Failed to delete file from database" });
+      }
+
+      return res.json({ message: "File deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting file:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Create a resource node (Admin only)
+  app.post("/api/curriculum/nodes", apiLimiter, requireAuth, requireRole("admin"), async (req: Request, res: Response) => {
+    try {
+      // Use a custom schema here so we never require an `id` from the client.
+      const ResourceNodeBody = z.object({
+        subjectId: z.string().min(1),
+        resourceKey: z.string().min(1),
+        parentNodeId: z.string().min(1).nullable().optional(),
+        title: z.string().min(1),
+        nodeType: z.string().min(1),
+        sortOrder: z.number().int().nonnegative().optional(),
+        meta: z.any().optional(),
+      });
+
+      const parsed = ResourceNodeBody.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid input", details: parsed.error.flatten() });
+      }
+
+      const data = parsed.data;
+      const node = await storage.createResourceNode({
+        subjectId: data.subjectId,
+        resourceKey: data.resourceKey,
+        parentNodeId: data.parentNodeId ?? null,
+        title: data.title,
+        nodeType: data.nodeType,
+        meta: data.meta ?? null,
+        sortOrder: data.sortOrder ?? 0,
+      });
+      return res.status(201).json(node);
+    } catch (error) {
+      console.error("Error creating resource node:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Update a resource node (Admin only)
+  app.patch("/api/curriculum/nodes/:nodeId", apiLimiter, requireAuth, requireRole("admin"), async (req: Request, res: Response) => {
+    try {
+      const node = await storage.updateResourceNode(req.params.nodeId, req.body);
+      if (!node) {
+        return res.status(404).json({ error: "Resource node not found" });
+      }
+      return res.json(node);
+    } catch (error) {
+      console.error("Error updating resource node:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Delete a resource node (Admin only) — cascades to child files
+  app.delete("/api/curriculum/nodes/:nodeId", apiLimiter, requireAuth, requireRole("admin"), async (req: Request, res: Response) => {
+    try {
+      const node = await storage.getResourceNode(req.params.nodeId);
+      if (!node) {
+        return res.status(404).json({ error: "Resource node not found" });
+      }
+
+      // Get all files under this node to clean up storage
+      const files = await storage.getFileAssets(req.params.nodeId);
+      for (const file of files) {
+        if (file.objectKey) {
+          await deleteFile(file.objectKey);
+        }
+      }
+
+      const deleted = await storage.deleteResourceNode(req.params.nodeId);
+      if (!deleted) {
+        return res.status(500).json({ error: "Failed to delete resource node" });
+      }
+
+      return res.json({ message: "Resource node deleted successfully", filesRemoved: files.length });
+    } catch (error) {
+      console.error("Error deleting resource node:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Delete a user (Admin only)
+  app.delete("/api/users/:id", apiLimiter, requireAuth, requireRole("admin"), async (req: Request, res: Response) => {
+    try {
+      // Prevent admin from deleting themselves
+      if (req.user && (req.user as any).id === req.params.id) {
+        return res.status(400).json({ error: "Cannot delete your own account" });
+      }
+      const user = await storage.getUser(req.params.id);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      const deleted = await storage.deleteUser(req.params.id);
+      if (!deleted) {
+        return res.status(500).json({ error: "Failed to delete user" });
+      }
+      return res.json({ message: "User deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // ============================================================================
+  // STUDENT REGISTRATION API
+  // Captures detailed student profile after login including IP address
+  // ============================================================================
+
+  // Check if student registration exists (lightweight check)
+  app.get("/api/student/registration/check", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req.user as any)?.id || req.session?.userId;
+      if (!userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      const registration = await storage.getStudentRegistrationByUserId(userId);
+      
+      return res.json({ 
+        hasRegistration: !!registration,
+        registration: registration || null 
+      });
+    } catch (error) {
+      console.error("Error checking student registration:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Create or update student registration
+  app.post("/api/student/register", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req.user as any)?.id || req.session?.userId;
+      if (!userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      // Validate the request body
+      const { name, fatherName, board, qualifications, subject, phoneNumber, age, schoolName } = req.body;
+
+      // Basic validation
+      if (!name || !fatherName || !board || !qualifications || !subject || !phoneNumber || !age || !schoolName) {
+        return res.status(400).json({ 
+          error: "All fields are required",
+          fields: { name, fatherName, board, qualifications, subject, phoneNumber, age, schoolName }
+        });
+      }
+
+      // Validate phone number format
+      const phoneRegex = /^\+?[\d\s-]{10,}$/;
+      if (!phoneRegex.test(phoneNumber)) {
+        return res.status(400).json({ error: "Invalid phone number format" });
+      }
+
+      // Validate age
+      const ageNum = parseInt(age);
+      if (isNaN(ageNum) || ageNum < 10 || ageNum > 25) {
+        return res.status(400).json({ error: "Age must be between 10 and 25" });
+      }
+
+      // Get client IP address
+      const ipAddress = req.headers['x-forwarded-for'] || 
+                        req.headers['x-real-ip'] || 
+                        req.socket.remoteAddress || 
+                        req.ip || 
+                        null;
+
+      // Get user agent
+      const userAgent = req.headers['user-agent'] || null;
+
+      // Check if registration already exists
+      const existingRegistration = await storage.getStudentRegistrationByUserId(userId);
+
+      let registration;
+      if (existingRegistration) {
+        // Update existing registration
+        registration = await storage.updateStudentRegistration(existingRegistration.id, {
+          name,
+          fatherName,
+          board,
+          qualifications,
+          subject,
+          phoneNumber,
+          age: ageNum,
+          schoolName,
+          ipAddress: Array.isArray(ipAddress) ? ipAddress[0] : ipAddress,
+          userAgent,
+          updatedAt: new Date(),
+        });
+      } else {
+        // Create new registration
+        registration = await storage.createStudentRegistration({
+          userId,
+          name,
+          fatherName,
+          board,
+          qualifications,
+          subject,
+          phoneNumber,
+          age: ageNum,
+          schoolName,
+          ipAddress: Array.isArray(ipAddress) ? ipAddress[0] : ipAddress,
+          userAgent,
+        });
+      }
+
+      // Also update the user's name in the users table if it differs
+      const user = await storage.getUser(userId);
+      if (user && user.name !== name) {
+        await storage.updateUser(userId, { name });
+      }
+
+      return res.status(201).json({
+        message: existingRegistration ? "Registration updated successfully" : "Registration completed successfully",
+        registration,
+      });
+    } catch (error: any) {
+      console.error("Error creating student registration:", error);
+      
+      // Handle duplicate registration error
+      if (error?.code === '23505') {
+        return res.status(409).json({ error: "Registration already exists for this user" });
+      }
+      
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Update existing student registration
+  app.patch("/api/student/registration/:id", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = (req.user as any)?.id || req.session?.userId;
+      if (!userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      const registration = await storage.getStudentRegistration(req.params.id);
+      if (!registration) {
+        return res.status(404).json({ error: "Registration not found" });
+      }
+
+      // Ensure the user can only update their own registration
+      if (registration.userId !== userId) {
+        return res.status(403).json({ error: "You can only update your own registration" });
+      }
+
+      const updated = await storage.updateStudentRegistration(req.params.id, {
+        ...req.body,
+        updatedAt: new Date(),
+      });
+
+      return res.json(updated);
+    } catch (error) {
+      console.error("Error updating student registration:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // ============================================================================
+  // END STUDENT REGISTRATION API
+  // ============================================================================
 
   return httpServer;
 }

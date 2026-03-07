@@ -2,13 +2,85 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ============================================
+   MOBILE RESPONSIVE BASE STYLES
+   ============================================ */
+
+@layer base {
+
+  /* Prevent horizontal overflow globally */
+  html {
+    overflow-x: hidden;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    overflow-x: hidden;
+  }
+
+  /* Minimum touch target size for interactive elements on mobile */
+  @media (max-width: 767px) {
+
+    button,
+    [role="button"],
+    a,
+    input,
+    select,
+    textarea {
+      min-height: 44px;
+      /* Ensure tappable areas are at least 44px for accessibility */
+    }
+
+    /* Override for icon-only buttons which manage their own sizing */
+    button[data-size="icon"],
+    [data-sidebar="trigger"] button {
+      min-height: unset;
+    }
+
+    /* Prevent text overflow at narrow viewports */
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
+      overflow-wrap: break-word;
+      word-break: break-word;
+      hyphens: auto;
+    }
+
+    /* Ensure images & media scale properly */
+    img,
+    video,
+    svg {
+      max-width: 100%;
+      height: auto;
+    }
+
+    /* Responsive tables */
+    table {
+      display: block;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+  }
+
+  /* Safe area padding for notched devices (iPhone X, etc.) */
+  @supports (padding: env(safe-area-inset-bottom)) {
+    .safe-area-bottom {
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+  }
+}
+
 /* LIGHT MODE */
 :root {
-  --button-outline: rgba(0,0,0, .10);
-  --badge-outline: rgba(0,0,0, .05);
+  --button-outline: rgba(0, 0, 0, .10);
+  --badge-outline: rgba(0, 0, 0, .05);
   --opaque-button-border-intensity: -8;
-  --elevate-1: rgba(0,0,0, .03);
-  --elevate-2: rgba(0,0,0, .08);
+  --elevate-1: rgba(0, 0, 0, .03);
+  --elevate-2: rgba(0, 0, 0, .08);
   --background: 0 0% 100%;
   --foreground: 222 47% 11%;
   --border: 220 13% 91%;
@@ -58,7 +130,7 @@
   --tracking-normal: 0em;
   --spacing: 0.25rem;
 
-/* Fallback for older browsers */
+  /* Fallback for older browsers */
   --sidebar-primary-border: hsl(var(--sidebar-primary));
   --sidebar-primary-border: hsl(from hsl(var(--sidebar-primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
 
@@ -88,11 +160,11 @@
 }
 
 .dark {
-  --button-outline: rgba(255,255,255, .10);
-  --badge-outline: rgba(255,255,255, .05);
+  --button-outline: rgba(255, 255, 255, .10);
+  --badge-outline: rgba(255, 255, 255, .05);
   --opaque-button-border-intensity: 9;
-  --elevate-1: rgba(255,255,255, .04);
-  --elevate-2: rgba(255,255,255, .09);
+  --elevate-1: rgba(255, 255, 255, .04);
+  --elevate-2: rgba(255, 255, 255, .09);
   --background: 222 47% 11%;
   --foreground: 210 20% 98%;
   --border: 215 16% 20%;
@@ -136,7 +208,7 @@
   --shadow-xl: 0px 2px 0px 0px hsl(217 91% 60% / 0.00), 0px 8px 10px -1px hsl(217 91% 60% / 0.00);
   --shadow-2xl: 0px 2px 0px 0px hsl(217 91% 60% / 0.00);
 
-/* Fallback for older browsers */
+  /* Fallback for older browsers */
   --sidebar-primary-border: hsl(var(--sidebar-primary));
   --sidebar-primary-border: hsl(from hsl(var(--sidebar-primary)) h s calc(l + var(--opaque-button-border-intensity)) / alpha);
 

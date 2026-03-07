@@ -114,7 +114,7 @@ function StudyTreeSidebar({ boards, subjects, topics, onSelect, selectedFilters,
                 <ChevronRight
                   className={`h-4 w-4 transition-transform ${isBoardOpen ? "rotate-90" : ""}`}
                 />
-                <span className="truncate">{board.name}</span>
+                <span className="truncate">{board.displayName}</span>
               </Button>
             </CollapsibleTrigger>
             <CollapsibleContent className="pl-4">
@@ -140,7 +140,7 @@ function StudyTreeSidebar({ boards, subjects, topics, onSelect, selectedFilters,
                         <ChevronRight
                           className={`h-4 w-4 transition-transform ${isSubjectOpen ? "rotate-90" : ""}`}
                         />
-                        <span className="truncate">{subject.name}</span>
+                        <span className="truncate">{subject.subjectName}</span>
                       </Button>
                     </CollapsibleTrigger>
                     <CollapsibleContent className="pl-4">
@@ -216,7 +216,7 @@ function ResourceCard({ material, subjects }: ResourceCardProps) {
         </CardHeader>
         <CardContent className="space-y-3">
           {subject && (
-            <p className="text-sm text-muted-foreground">{subject.name}</p>
+            <p className="text-sm text-muted-foreground">{subject.subjectName}</p>
           )}
           {material.description && (
             <p className="text-sm text-muted-foreground line-clamp-2">

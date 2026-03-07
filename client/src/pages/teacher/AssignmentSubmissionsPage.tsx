@@ -117,7 +117,7 @@ export function AssignmentSubmissionsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Submissions"
-        description={`${assignment.title} - ${subject?.name || "Unknown Subject"}`}
+        description={`${assignment.title} - ${subject?.subjectName || "Unknown Subject"}`}
         actions={
           <Link href="/teacher/assignments">
             <Button variant="outline" data-testid="button-back-to-assignments">

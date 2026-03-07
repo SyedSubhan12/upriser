@@ -76,7 +76,7 @@ function AssignmentCard({ assignment, submission, subjects }: AssignmentCardProp
         </CardHeader>
         <CardContent className="space-y-3">
           {subject && (
-            <p className="text-sm text-muted-foreground">{subject.name}</p>
+            <p className="text-sm text-muted-foreground">{subject.subjectName}</p>
           )}
           {assignment.dueDate && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">

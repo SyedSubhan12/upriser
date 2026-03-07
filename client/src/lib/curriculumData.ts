@@ -81,7 +81,7 @@ export interface FileAsset {
     fileContent?: string;     // Base64 if needed
 }
 
-export type FileType = 'qp' | 'ms' | 'gt' | 'er' | 'in' | 'ir' | 'other';
+export type FileType = 'qp' | 'ms' | 'gt' | 'er' | 'in' | 'ir' | 'ci' | 'sf' | 'pm' | 'sm' | 'sp' | 'other';
 
 // IB-specific types
 export interface SubjectGroup {
@@ -103,6 +103,11 @@ export const FILE_TYPE_LABELS: Record<FileType, string> = {
     er: 'Examiner Report',
     in: 'Insert',
     ir: 'Instructions',
+    ci: 'Confidential Instructions',
+    sf: 'Source File',
+    pm: 'Principal Examiner Report',
+    sm: 'Specimen Mark Scheme',
+    sp: 'Specimen Paper',
     other: 'Other',
 };
 
@@ -113,6 +118,11 @@ export const FILE_TYPE_SHORT_LABELS: Record<FileType, string> = {
     er: 'ER',
     in: 'IN',
     ir: 'IR',
+    ci: 'CI',
+    sf: 'SF',
+    pm: 'PM',
+    sm: 'SM',
+    sp: 'SP',
     other: 'Other',
 };
 

@@ -100,9 +100,6 @@ export function ResourceListPage() {
         ? allFiles.filter(f => f.fileType === selectedFileType)
         : allFiles;
 
-    // Check if this is past papers (special modes)
-    const isPastPapers = resourceKey === "past_papers";
-
     // Build breadcrumbs
     const breadcrumbs = [
         { label: subject.subjectName, href: `/subject/${subject.id}` },
@@ -118,23 +115,6 @@ export function ResourceListPage() {
                     backHref={`/subject/${subject.id}`}
                     breadcrumbs={breadcrumbs}
                 />
-
-                {/* Past Papers Modes */}
-                {isPastPapers && (
-                    <section className="mt-6">
-                        <h2 className="mb-4 text-lg font-semibold">Browse Mode</h2>
-                        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                            {pastPapersModes.map((mode) => (
-                                <PastPapersModeCard
-                                    key={mode.key}
-                                    mode={mode}
-                                    subjectId={subject.id}
-                                    resourceKey={resourceKey!}
-                                />
-                            ))}
-                        </div>
-                    </section>
-                )}
 
                 {/* File Type Filter */}
                 {availableFileTypes.length > 0 && (

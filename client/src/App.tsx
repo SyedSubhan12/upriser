@@ -7,6 +7,7 @@ import { AuthProvider } from "@/context/AuthContext";
 import { ThemeProvider } from "@/context/ThemeContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { OnboardingGate } from "@/components/onboarding";
+import { RegistrationGate } from "@/components/RegistrationGate";
 import { FeedbackPopup } from "@/components/FeedbackPopup";
 import NotFound from "@/pages/not-found";
 
@@ -39,6 +40,10 @@ import { AssignmentsPage } from "@/pages/student/AssignmentsPage";
 import { AssignmentDetailPage } from "@/pages/student/AssignmentDetailPage";
 import { AnnouncementsPage } from "@/pages/student/AnnouncementsPage";
 import { ProfilePage } from "@/pages/student/ProfilePage";
+import { StudentRegistrationPage } from "@/pages/student/StudentRegistrationPage";
+import { McqPracticePage } from "@/pages/student/mcq/McqPracticePage";
+import { McqSessionPage } from "@/pages/student/mcq/McqSessionPage";
+import { McqStatsPage } from "@/pages/student/mcq/McqStatsPage";
 import { TeacherLayout } from "@/layouts/TeacherLayout";
 import { TeacherDashboardPage } from "@/pages/teacher/TeacherDashboardPage";
 import { MyMaterialsPage } from "@/pages/teacher/MyMaterialsPage";
@@ -49,6 +54,7 @@ import { QuizResultsPage } from "@/pages/teacher/QuizResultsPage";
 import { AssignmentsManagePage } from "@/pages/teacher/AssignmentsManagePage";
 import { AssignmentSubmissionsPage } from "@/pages/teacher/AssignmentSubmissionsPage";
 import { TeacherAnnouncementsPage } from "@/pages/teacher/TeacherAnnouncementsPage";
+import { McqManagerPage } from "@/pages/teacher/McqManagerPage";
 import { AdminLayout } from "@/layouts/AdminLayout";
 import { AdminDashboardPage } from "@/pages/admin/AdminDashboardPage";
 import { BoardsPage } from "@/pages/admin/BoardsPage";
@@ -60,12 +66,14 @@ import { ContentModerationPage } from "@/pages/admin/ContentModerationPage";
 import { AnalyticsPage } from "@/pages/admin/AnalyticsPage";
 import { SystemSettingsPage } from "@/pages/admin/SystemSettingsPage";
 import { FeedbackPage } from "@/pages/admin/FeedbackPage";
+import { AdminResourceManagerPage } from "@/pages/admin/AdminResourceManagerPage";
 
 function StudentRoutes() {
   return (
     <ProtectedRoute requiredAuth={true}>
       <StudentLayout>
         <Switch>
+          <Route path="/student/registration" component={StudentRegistrationPage} />
           <Route path="/student/dashboard" component={StudentDashboardPage} />
           <Route path="/student/materials" component={StudyMaterialsPage} />
           <Route path="/student/materials/:id" component={MaterialDetailPage} />
@@ -76,6 +84,9 @@ function StudentRoutes() {
           <Route path="/student/assignments/:id" component={AssignmentDetailPage} />
           <Route path="/student/announcements" component={AnnouncementsPage} />
           <Route path="/student/profile" component={ProfilePage} />
+          <Route path="/student/mcq/practice" component={McqPracticePage} />
+          <Route path="/student/mcq/session/:id" component={McqSessionPage} />
+          <Route path="/student/mcq/stats" component={McqStatsPage} />
           <Route component={NotFound} />
         </Switch>
       </StudentLayout>
@@ -99,6 +110,7 @@ function TeacherRoutes() {
           <Route path="/teacher/assignments" component={AssignmentsManagePage} />
           <Route path="/teacher/assignments/:assignmentId/submissions" component={AssignmentSubmissionsPage} />
           <Route path="/teacher/announcements" component={TeacherAnnouncementsPage} />
+          <Route path="/teacher/mcq-manager" component={McqManagerPage} />
           <Route component={NotFound} />
         </Switch>
       </TeacherLayout>
@@ -122,6 +134,7 @@ function AdminRoutes() {
           <Route path="/admin/analytics" component={AnalyticsPage} />
           <Route path="/admin/settings" component={SystemSettingsPage} />
           <Route path="/admin/feedback" component={FeedbackPage} />
+          <Route path="/admin/resources" component={AdminResourceManagerPage} />
           <Route component={NotFound} />
         </Switch>
       </AdminLayout>
@@ -144,12 +157,12 @@ function Router() {
       {/* Curriculum - Boards list */}
       <Route path="/curriculum" component={BoardsListPage} />
 
-      {/* Board Detail - Qualification/Program picker */}
-      <Route path="/curriculum/:boardKey" component={BoardDetailPage} />
-
-      {/* IB DP Subject Groups (must be before generic routes) */}
+      {/* IB DP Subject Groups (must be before generic :boardKey route) */}
       <Route path="/curriculum/ib/dp/groups" component={IBSubjectGroupPage} />
       <Route path="/curriculum/ib/:programId/:groupId" component={SubjectListPage} />
+
+      {/* Board Detail - Qualification/Program picker */}
+      <Route path="/curriculum/:boardKey" component={BoardDetailPage} />
 
       {/* Branch Selector - Current vs Legacy (only when needed) */}
       <Route path="/curriculum/:boardKey/:qualKey/branch" component={BranchSelectorPage} />
@@ -198,7 +211,10 @@ function Router() {
       <Route path="/boards" component={BoardSelectionPage} />
 
       {/* Protected routes - require authentication */}
+      <Route path="/student" component={StudentRoutes} />
+      <Route path="/student/:rest" component={StudentRoutes} />
       <Route path="/student/:rest*" component={StudentRoutes} />
+      <Route path="/student/:rest*/*" component={StudentRoutes} />
       <Route path="/teacher/:rest*" component={TeacherRoutes} />
       <Route path="/admin/:rest*" component={AdminRoutes} />
 
@@ -216,7 +232,9 @@ function App() {
             <Toaster />
             <FeedbackPopup delayMinutes={2} />
             <OnboardingGate>
-              <Router />
+              <RegistrationGate>
+                <Router />
+              </RegistrationGate>
             </OnboardingGate>
           </TooltipProvider>
         </AuthProvider>

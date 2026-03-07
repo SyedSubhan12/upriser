@@ -173,9 +173,9 @@ export function UsersPage() {
     const primaryBoardId = user.boardIds[0];
     const board = boards.find((b) => b.id === primaryBoardId);
     if (user.boardIds.length > 1) {
-      return `${board?.name || "Unknown"} +${user.boardIds.length - 1}`;
+      return `${board?.displayName || "Unknown"} +${user.boardIds.length - 1}`;
     }
-    return board?.name || "Unknown";
+    return board?.displayName || "Unknown";
   };
 
   return (
@@ -224,7 +224,7 @@ export function UsersPage() {
                   <SelectItem value="all">All Boards</SelectItem>
                   {boards.map((board) => (
                     <SelectItem key={board.id} value={board.id}>
-                      {board.name}
+                      {board.displayName}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -414,7 +414,7 @@ export function UsersPage() {
                       <SelectItem value="all">All Boards</SelectItem>
                       {boards.map((board) => (
                         <SelectItem key={board.id} value={board.id}>
-                          {board.name}
+                          {board.displayName}
                         </SelectItem>
                       ))}
                     </SelectContent>

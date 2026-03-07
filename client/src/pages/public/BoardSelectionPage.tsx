@@ -35,13 +35,13 @@ export function BoardSelectionPage() {
       <div className="flex min-h-[calc(100vh-8rem)] flex-col items-center justify-center px-4 py-12">
         <div className="w-full max-w-4xl">
           <div className="mb-8 text-center">
-            <h1 
+            <h1
               className="text-2xl font-bold md:text-3xl"
               data-testid="text-board-selection-title"
             >
               Select Your Education Board
             </h1>
-            <p 
+            <p
               className="mt-2 text-muted-foreground"
               data-testid="text-board-selection-description"
             >
@@ -50,9 +50,9 @@ export function BoardSelectionPage() {
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {mockBoards.filter(board => board.isActive).map((board) => {
+            {mockBoards.filter(board => board.isEnabled).map((board) => {
               const isSelected = selectedBoardId === board.id;
-              
+
               return (
                 <Card
                   key={board.id}
@@ -66,26 +66,26 @@ export function BoardSelectionPage() {
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between gap-2">
                       <div>
-                        <CardTitle 
+                        <CardTitle
                           className="text-lg"
                           data-testid={`text-board-name-${board.id}`}
                         >
-                          {board.name}
+                          {board.displayName}
                         </CardTitle>
                         <CardDescription data-testid={`text-board-code-${board.id}`}>
-                          {board.code}
+                          {board.boardKey}
                         </CardDescription>
                       </div>
                       {isSelected && (
-                        <CheckCircle 
-                          className="h-5 w-5 shrink-0 text-primary" 
+                        <CheckCircle
+                          className="h-5 w-5 shrink-0 text-primary"
                           data-testid={`icon-board-selected-${board.id}`}
                         />
                       )}
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <p 
+                    <p
                       className="text-sm text-muted-foreground"
                       data-testid={`text-board-description-${board.id}`}
                     >
@@ -110,7 +110,7 @@ export function BoardSelectionPage() {
           </div>
 
           {!isAuthenticated && (
-            <p 
+            <p
               className="mt-4 text-center text-sm text-muted-foreground"
               data-testid="text-login-prompt"
             >

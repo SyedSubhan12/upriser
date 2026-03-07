@@ -258,7 +258,7 @@ export function AssignmentDetailPage() {
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Subject</span>
                     <span className="font-medium" data-testid="text-subject">
-                      {subject.name}
+                      {subject.subjectName}
                     </span>
                   </div>
                 )}

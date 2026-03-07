@@ -13,6 +13,7 @@ import {
   LogOut,
   GraduationCap,
   MessageSquare,
+  FolderOpen,
 } from "lucide-react";
 
 import { useAuth } from "@/context/AuthContext";
@@ -39,6 +40,7 @@ const MENU_ITEMS = [
   { title: "Home", url: "/", icon: Home },
   { title: "Dashboard", url: "/admin/dashboard", icon: LayoutDashboard },
   { title: "Boards & Subjects", url: "/admin/boards", icon: Layers },
+  { title: "Resources", url: "/admin/resources", icon: FolderOpen },
   { title: "Users", url: "/admin/users", icon: Users },
   { title: "Content Moderation", url: "/admin/moderation", icon: Shield },
   { title: "Analytics", url: "/admin/analytics", icon: BarChart3 },

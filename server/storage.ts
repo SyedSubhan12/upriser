@@ -10,17 +10,18 @@ import {
   type Assignment, type InsertAssignment,
   type Submission, type InsertSubmission,
   type Announcement, type InsertAnnouncement,
-  type Qualification, type Branch, type ResourceCategory, type ResourceNode, type FileAsset,
+  type Qualification, type Branch, type ResourceCategory, type ResourceNode, type InsertResourceNode, type FileAsset,
   type UserProfile, type InsertUserProfile,
   type UserPreference, type InsertUserPreferences,
   type UserSubject, type InsertUserSubject,
   type Feedback, type InsertFeedback,
+  type StudentRegistration, type InsertStudentRegistration,
   users, boards, subjects, topics, materials, quizzes, questions, quizAttempts, assignments, submissions, announcements,
   qualifications, branches, subjectGroups, resourceCategories, resourceNodes, fileAssets,
-  userProfiles, userPreferences, userSubjects, feedback
+  userProfiles, userPreferences, userSubjects, feedback, studentRegistrations
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, isNull, sql, count } from "drizzle-orm";
+import { eq, and, desc, isNull, sql, count, or } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
@@ -30,17 +31,20 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, data: Partial<InsertUser>): Promise<User | undefined>;
   getAllUsers(filters?: { role?: string; isActive?: boolean }): Promise<User[]>;
+  deleteUser(id: string): Promise<boolean>;
 
   getBoard(id: string): Promise<Board | undefined>;
   getAllBoards(): Promise<Board[]>;
   createBoard(board: InsertBoard): Promise<Board>;
   updateBoard(id: string, data: Partial<InsertBoard>): Promise<Board | undefined>;
+  deleteBoard(id: string): Promise<boolean>;
 
   getSubject(id: string): Promise<Subject | undefined>;
   getAllSubjects(): Promise<Subject[]>;
   getSubjectsByBoard(boardId: string): Promise<Subject[]>;
   createSubject(subject: InsertSubject): Promise<Subject>;
   updateSubject(id: string, data: Partial<InsertSubject>): Promise<Subject | undefined>;
+  deleteSubject(id: string): Promise<boolean>;
 
   getTopic(id: string): Promise<Topic | undefined>;
   getTopicsBySubject(subjectId: string): Promise<Topic[]>;
@@ -111,6 +115,12 @@ export interface IStorage {
   incrementDownloadCount(fileId: string): Promise<void>;
   getFileAssetByObjectKey(objectKey: string): Promise<FileAsset | undefined>;
   getFileAssetsPaginated(filters: { subjectId?: string; resourceKey?: string; fileType?: string; year?: number; session?: string }, page: number, limit: number): Promise<{ files: FileAsset[]; total: number }>;
+  deleteFileAsset(id: string): Promise<boolean>;
+
+  // Resource node management
+  createResourceNode(data: InsertResourceNode): Promise<ResourceNode>;
+  updateResourceNode(id: string, data: Partial<InsertResourceNode>): Promise<ResourceNode | undefined>;
+  deleteResourceNode(id: string): Promise<boolean>;
 
   // Onboarding methods
   getUserProfileByDeviceId(deviceId: string): Promise<UserProfile | undefined>;
@@ -124,6 +134,13 @@ export interface IStorage {
   // Feedback methods
   getAllFeedback(): Promise<Feedback[]>;
   createFeedback(feedback: InsertFeedback): Promise<Feedback>;
+
+  // Student registration methods
+  getStudentRegistration(id: string): Promise<StudentRegistration | undefined>;
+  getStudentRegistrationByUserId(userId: string): Promise<StudentRegistration | undefined>;
+  createStudentRegistration(registration: InsertStudentRegistration): Promise<StudentRegistration>;
+  updateStudentRegistration(id: string, data: Partial<InsertStudentRegistration>): Promise<StudentRegistration | undefined>;
+  upsertStudentRegistration(userId: string, data: Partial<InsertStudentRegistration>): Promise<StudentRegistration>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -171,6 +188,11 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(users);
   }
 
+  async deleteUser(id: string): Promise<boolean> {
+    const [deleted] = await db.delete(users).where(eq(users.id, id)).returning();
+    return !!deleted;
+  }
+
   async getBoard(id: string): Promise<Board | undefined> {
     const [board] = await db.select().from(boards).where(eq(boards.id, id));
     return board;
@@ -189,6 +211,11 @@ export class DatabaseStorage implements IStorage {
   async updateBoard(id: string, data: Partial<InsertBoard>): Promise<Board | undefined> {
     const [board] = await db.update(boards).set(data).where(eq(boards.id, id)).returning();
     return board;
+  }
+
+  async deleteBoard(id: string): Promise<boolean> {
+    const [deleted] = await db.delete(boards).where(eq(boards.id, id)).returning();
+    return !!deleted;
   }
 
   async getSubject(id: string): Promise<Subject | undefined> {
@@ -213,6 +240,11 @@ export class DatabaseStorage implements IStorage {
   async updateSubject(id: string, data: Partial<InsertSubject>): Promise<Subject | undefined> {
     const [subject] = await db.update(subjects).set(data).where(eq(subjects.id, id)).returning();
     return subject;
+  }
+
+  async deleteSubject(id: string): Promise<boolean> {
+    const [deleted] = await db.delete(subjects).where(eq(subjects.id, id)).returning();
+    return !!deleted;
   }
 
   async getTopic(id: string): Promise<Topic | undefined> {
@@ -481,8 +513,15 @@ export class DatabaseStorage implements IStorage {
 
     // Handle parent node filtering
     if (parentNodeId === undefined || parentNodeId === null) {
-      // Fetch root nodes (where parentNodeId is NULL)
-      conditions.push(isNull(resourceNodes.parentNodeId));
+      // Fetch logical "root" nodes for this subject/resource.
+      // Older imports used a synthetic parent ID "node-pp-root" without creating an actual root node.
+      // To support both styles, treat rows with parentNodeId NULL OR "node-pp-root" as top-level.
+      conditions.push(
+        or(
+          isNull(resourceNodes.parentNodeId),
+          eq(resourceNodes.parentNodeId, "node-pp-root")
+        )
+      );
     } else {
       // Fetch children of specific parent
       conditions.push(eq(resourceNodes.parentNodeId, parentNodeId));
@@ -601,6 +640,27 @@ export class DatabaseStorage implements IStorage {
     return { files, total: Number(totalResult?.value ?? 0) };
   }
 
+  async deleteFileAsset(id: string): Promise<boolean> {
+    const [deleted] = await db.delete(fileAssets).where(eq(fileAssets.id, id)).returning();
+    return !!deleted;
+  }
+
+  async createResourceNode(data: InsertResourceNode): Promise<ResourceNode> {
+    const id = randomUUID();
+    const [node] = await db.insert(resourceNodes).values({ ...data, id }).returning();
+    return node;
+  }
+
+  async updateResourceNode(id: string, data: Partial<InsertResourceNode>): Promise<ResourceNode | undefined> {
+    const [node] = await db.update(resourceNodes).set(data).where(eq(resourceNodes.id, id)).returning();
+    return node;
+  }
+
+  async deleteResourceNode(id: string): Promise<boolean> {
+    const [deleted] = await db.delete(resourceNodes).where(eq(resourceNodes.id, id)).returning();
+    return !!deleted;
+  }
+
   // =============================================
   // ONBOARDING METHODS
   // =============================================
@@ -679,6 +739,65 @@ export class DatabaseStorage implements IStorage {
     const id = randomUUID();
     const [created] = await db.insert(feedback).values({ ...insertFeedback, id }).returning();
     return created;
+  }
+
+  // =============================================
+  // STUDENT REGISTRATION METHODS
+  // =============================================
+
+  async getStudentRegistration(id: string): Promise<StudentRegistration | undefined> {
+    const [registration] = await db.select().from(studentRegistrations).where(eq(studentRegistrations.id, id));
+    return registration;
+  }
+
+  async getStudentRegistrationByUserId(userId: string): Promise<StudentRegistration | undefined> {
+    const [registration] = await db.select().from(studentRegistrations).where(eq(studentRegistrations.userId, userId));
+    return registration;
+  }
+
+  async createStudentRegistration(registration: InsertStudentRegistration): Promise<StudentRegistration> {
+    const id = randomUUID();
+    const [created] = await db.insert(studentRegistrations).values({
+      ...registration,
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      registrationCompletedAt: new Date(),
+    }).returning();
+    return created;
+  }
+
+  async updateStudentRegistration(id: string, data: Partial<InsertStudentRegistration>): Promise<StudentRegistration | undefined> {
+    const [updated] = await db.update(studentRegistrations)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(studentRegistrations.id, id))
+      .returning();
+    return updated;
+  }
+
+  async upsertStudentRegistration(userId: string, data: Partial<InsertStudentRegistration>): Promise<StudentRegistration> {
+    const existing = await this.getStudentRegistrationByUserId(userId);
+
+    if (existing) {
+      // Update existing registration
+      const [updated] = await db.update(studentRegistrations)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(studentRegistrations.userId, userId))
+        .returning();
+      return updated;
+    } else {
+      // Create new registration
+      const id = randomUUID();
+      const [created] = await db.insert(studentRegistrations).values({
+        ...data,
+        userId,
+        id,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        registrationCompletedAt: new Date(),
+      }).returning();
+      return created;
+    }
   }
 }
 

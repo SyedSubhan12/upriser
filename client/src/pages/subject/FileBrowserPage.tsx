@@ -10,6 +10,8 @@ import { FileQuestion } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import type { Subject, Board, Qualification, Branch, ResourceCategory, ResourceNode, FileAsset, FileType } from "@/lib/curriculumData";
 import { Skeleton } from "@/components/ui/skeleton";
+import { parseCAIEFilename } from "@shared/caie-utils";
+import { cn } from "@/lib/utils";
 
 interface SubjectContext {
     subject: Subject;
@@ -28,6 +30,8 @@ export function FileBrowserPage() {
     const mode = searchParams.get("mode"); // yearly, topical, etc.
 
     const [selectedFileType, setSelectedFileType] = useState<FileType | null>(null);
+    const [selectedPaper, setSelectedPaper] = useState<number | null>(null);
+    const [selectedVariant, setSelectedVariant] = useState<number | null>(null);
 
     // Fetch context
     const { data: context, isLoading: contextLoading } = useQuery<SubjectContext>({
@@ -52,6 +56,26 @@ export function FileBrowserPage() {
         enabled: !!folderId,
     });
 
+    // Enrich files with CAIE metadata if missing
+    const enrichedFiles = useMemo(() => {
+        return files.map(file => {
+            if (file.fileType !== 'other') return file;
+
+            const parsed = parseCAIEFilename(file.title || file.fileName || "");
+            if (parsed.isValid) {
+                return {
+                    ...file,
+                    fileType: parsed.fileType,
+                    year: file.year || parsed.year || undefined,
+                    session: file.session || parsed.sessionCode || undefined,
+                    paper: file.paper || parsed.paper || undefined,
+                    variant: file.variant || parsed.variant || undefined,
+                };
+            }
+            return file;
+        });
+    }, [files]);
+
     // Fetch all nodes if we need to find the current folder title (if folderId is set)
     // Actually, we might need a route to get a single node by ID.
     // Let's assume for now that logic will handle it or we can add it.
@@ -68,14 +92,35 @@ export function FileBrowserPage() {
     // Get available file types (must be before early returns)
     const availableFileTypes = useMemo(() => {
         const types = new Set<FileType>();
-        files.forEach((f) => types.add(f.fileType));
-        return Array.from(types);
-    }, [files]);
+        enrichedFiles.forEach((f) => types.add(f.fileType));
+        return Array.from(types).sort();
+    }, [enrichedFiles]);
+
+    const availablePapers = useMemo(() => {
+        const papers = new Set<number>();
+        enrichedFiles.forEach((f) => {
+            if (f.paper !== undefined && f.paper !== null) papers.add(f.paper);
+        });
+        return Array.from(papers).sort((a, b) => a - b);
+    }, [enrichedFiles]);
+
+    const availableVariants = useMemo(() => {
+        const variants = new Set<number>();
+        enrichedFiles.forEach((f) => {
+            if (f.variant !== undefined && f.variant !== null) {
+                // Only show variants for the selected paper if one is selected
+                if (selectedPaper === null || f.paper === selectedPaper) {
+                    variants.add(f.variant);
+                }
+            }
+        });
+        return Array.from(variants).sort((a, b) => a - b);
+    }, [enrichedFiles, selectedPaper]);
 
     // Build breadcrumb trail (must be before early returns)
     const breadcrumbItems: BreadcrumbItem[] = useMemo(() => {
         if (!context || !category) return [];
-        
+
         const items: BreadcrumbItem[] = [
             {
                 label: category.displayName,
@@ -90,12 +135,15 @@ export function FileBrowserPage() {
         return items;
     }, [context, category, currentFolder, resourceKey]);
 
-    // Filter files by type (must be before early returns)
+    // Filter files by type, paper, and variant (must be before early returns)
     const filteredFiles = useMemo(() => {
-        return selectedFileType
-            ? files.filter(f => f.fileType === selectedFileType)
-            : files;
-    }, [files, selectedFileType]);
+        return enrichedFiles.filter(f => {
+            const typeMatch = !selectedFileType || f.fileType === selectedFileType;
+            const paperMatch = selectedPaper === null || f.paper === selectedPaper;
+            const variantMatch = selectedVariant === null || f.variant === selectedVariant;
+            return typeMatch && paperMatch && variantMatch;
+        });
+    }, [enrichedFiles, selectedFileType, selectedPaper, selectedVariant]);
 
     if (!isLoading && (!context || !category)) {
         return (
@@ -160,16 +208,104 @@ export function FileBrowserPage() {
                 {/* Breadcrumbs */}
                 <Breadcrumbs items={breadcrumbItems} className="mt-4" />
 
-                {/* File Type Filter */}
-                {availableFileTypes.length > 0 && (
-                    <section className="mt-6">
+                {/* Filters */}
+                <section className="mt-6 flex flex-col gap-4">
+                    {availableFileTypes.length > 0 && (
                         <ScrollableFileTypeFilterBar
                             selectedType={selectedFileType}
-                            onSelect={setSelectedFileType}
+                            onSelect={(type) => {
+                                setSelectedFileType(type);
+                                // Optional: Reset paper/variant when type changes? 
+                                // Usually better to keep them if they might still apply.
+                            }}
                             availableTypes={availableFileTypes}
                         />
-                    </section>
-                )}
+                    )}
+
+                    <div className="flex flex-wrap gap-4">
+                        {availablePapers.length > 0 && (
+                            <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium text-muted-foreground mr-1">Paper:</span>
+                                <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+                                    <button
+                                        onClick={() => setSelectedPaper(null)}
+                                        className={cn(
+                                            "inline-flex shrink-0 items-center justify-center rounded px-2.5 py-1 text-xs font-medium transition-colors border",
+                                            selectedPaper === null
+                                                ? "border-primary bg-primary text-primary-foreground"
+                                                : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
+                                        )}
+                                    >
+                                        All
+                                    </button>
+                                    {availablePapers.map(paper => (
+                                        <button
+                                            key={paper}
+                                            onClick={() => {
+                                                setSelectedPaper(paper);
+                                                setSelectedVariant(null); // Reset variant when paper changes
+                                            }}
+                                            className={cn(
+                                                "inline-flex shrink-0 items-center justify-center rounded px-2.5 py-1 text-xs font-medium transition-colors border",
+                                                selectedPaper === paper
+                                                    ? "border-primary bg-primary text-primary-foreground"
+                                                    : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
+                                            )}
+                                        >
+                                            {paper}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {availableVariants.length > 0 && (
+                            <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium text-muted-foreground mr-1">Variant:</span>
+                                <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+                                    <button
+                                        onClick={() => setSelectedVariant(null)}
+                                        className={cn(
+                                            "inline-flex shrink-0 items-center justify-center rounded px-2.5 py-1 text-xs font-medium transition-colors border",
+                                            selectedVariant === null
+                                                ? "border-primary bg-primary text-primary-foreground"
+                                                : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
+                                        )}
+                                    >
+                                        All
+                                    </button>
+                                    {availableVariants.map(variant => (
+                                        <button
+                                            key={variant}
+                                            onClick={() => setSelectedVariant(variant)}
+                                            className={cn(
+                                                "inline-flex shrink-0 items-center justify-center rounded px-2.5 py-1 text-xs font-medium transition-colors border",
+                                                selectedVariant === variant
+                                                    ? "border-primary bg-primary text-primary-foreground"
+                                                    : "border-border bg-background text-muted-foreground hover:bg-muted hover:text-foreground"
+                                            )}
+                                        >
+                                            {variant}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {(selectedFileType || selectedPaper || selectedVariant) && (
+                            <button
+                                onClick={() => {
+                                    setSelectedFileType(null);
+                                    setSelectedPaper(null);
+                                    setSelectedVariant(null);
+                                }}
+                                className="text-xs text-primary hover:underline ml-auto"
+                            >
+                                Reset all filters
+                            </button>
+                        )}
+                    </div>
+                </section>
 
                 {/* Content */}
                 <section className="mt-6 space-y-6">

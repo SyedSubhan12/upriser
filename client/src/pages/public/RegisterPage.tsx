@@ -68,7 +68,11 @@ export function RegisterPage() {
           title: "Account created!",
           description: "Welcome to Upriser. Redirecting to your dashboard...",
         });
-        window.location.href = `/${user.role}/dashboard`;
+        if (user?.role === "student") {
+          window.location.href = "/student/dashboard";
+        } else {
+          window.location.href = `/${user.role}/dashboard`;
+        }
       } else {
         const error = await response.json();
         toast({

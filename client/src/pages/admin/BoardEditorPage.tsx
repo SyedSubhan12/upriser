@@ -35,21 +35,21 @@ export function BoardEditorPage() {
   const existingBoard = isEditing ? boards.find((b) => b.id === boardId) ?? null : null;
 
   const [formData, setFormData] = useState({
-    name: "",
-    code: "",
+    displayName: "",
+    boardKey: "",
     description: "",
-    isActive: true,
+    isEnabled: true,
   });
 
-  const [errors, setErrors] = useState<{ name?: string; code?: string }>({});
+  const [errors, setErrors] = useState<{ displayName?: string; boardKey?: string }>({});
 
   useEffect(() => {
     if (isEditing && existingBoard) {
       setFormData({
-        name: existingBoard.name,
-        code: existingBoard.code,
+        displayName: existingBoard.displayName,
+        boardKey: existingBoard.boardKey,
         description: existingBoard.description || "",
-        isActive: existingBoard.isActive,
+        isEnabled: existingBoard.isEnabled,
       });
     }
   }, [isEditing, existingBoard]);
@@ -58,24 +58,24 @@ export function BoardEditorPage() {
     mutationFn: (values: typeof formData) => {
       if (isEditing && boardId) {
         return updateAdminBoard(boardId, {
-          name: values.name,
-          code: values.code,
+          name: values.displayName,
+          code: values.boardKey,
           description: values.description || null,
-          isActive: values.isActive,
+          isActive: values.isEnabled,
         });
       }
       return createAdminBoard({
-        name: values.name,
-        code: values.code,
+        name: values.displayName,
+        code: values.boardKey,
         description: values.description || null,
-        isActive: values.isActive,
+        isActive: values.isEnabled,
       });
     },
     onSuccess: (savedBoard) => {
       queryClient.invalidateQueries({ queryKey: ["admin-boards"] });
       toast({
         title: isEditing ? "Board Updated" : "Board Created",
-        description: `${savedBoard.name} has been ${isEditing ? "updated" : "created"} successfully.`,
+        description: `${savedBoard.displayName} has been ${isEditing ? "updated" : "created"} successfully.`,
       });
       navigate("/admin/boards");
     },
@@ -90,16 +90,16 @@ export function BoardEditorPage() {
   });
 
   const validateForm = (): boolean => {
-    const newErrors: { name?: string; code?: string } = {};
+    const newErrors: { displayName?: string; boardKey?: string } = {};
 
-    if (!formData.name.trim()) {
-      newErrors.name = "Board name is required";
+    if (!formData.displayName.trim()) {
+      newErrors.displayName = "Board name is required";
     }
 
-    if (!formData.code.trim()) {
-      newErrors.code = "Board code is required";
-    } else if (formData.code.length < 2) {
-      newErrors.code = "Code must be at least 2 characters";
+    if (!formData.boardKey.trim()) {
+      newErrors.boardKey = "Board code is required";
+    } else if (formData.boardKey.length < 2) {
+      newErrors.boardKey = "Code must be at least 2 characters";
     }
 
     setErrors(newErrors);
@@ -163,17 +163,17 @@ export function BoardEditorPage() {
                 <Label htmlFor="name">Board Name <span className="text-destructive">*</span></Label>
                 <Input
                   id="name"
-                  value={formData.name}
+                  value={formData.displayName}
                   onChange={(e) => {
-                    setFormData((prev) => ({ ...prev, name: e.target.value }));
-                    if (errors.name) setErrors((prev) => ({ ...prev, name: undefined }));
+                    setFormData((prev) => ({ ...prev, displayName: e.target.value }));
+                    if (errors.displayName) setErrors((prev) => ({ ...prev, displayName: undefined }));
                   }}
                   placeholder="e.g., Central Board of Secondary Education"
-                  className={errors.name ? "border-destructive" : ""}
+                  className={errors.displayName ? "border-destructive" : ""}
                   data-testid="input-board-name"
                 />
-                {errors.name && (
-                  <p className="text-xs text-destructive">{errors.name}</p>
+                {errors.displayName && (
+                  <p className="text-xs text-destructive">{errors.displayName}</p>
                 )}
               </div>
 
@@ -181,20 +181,20 @@ export function BoardEditorPage() {
                 <Label htmlFor="code">Board Code <span className="text-destructive">*</span></Label>
                 <Input
                   id="code"
-                  value={formData.code}
+                  value={formData.boardKey}
                   onChange={(e) => {
                     setFormData((prev) => ({
                       ...prev,
-                      code: e.target.value.toUpperCase(),
+                      boardKey: e.target.value.toUpperCase(),
                     }));
-                    if (errors.code) setErrors((prev) => ({ ...prev, code: undefined }));
+                    if (errors.boardKey) setErrors((prev) => ({ ...prev, boardKey: undefined }));
                   }}
                   placeholder="e.g., CBSE"
-                  className={errors.code ? "border-destructive" : ""}
+                  className={errors.boardKey ? "border-destructive" : ""}
                   data-testid="input-board-code"
                 />
-                {errors.code ? (
-                  <p className="text-xs text-destructive">{errors.code}</p>
+                {errors.boardKey ? (
+                  <p className="text-xs text-destructive">{errors.boardKey}</p>
                 ) : (
                   <p className="text-xs text-muted-foreground">
                     A short unique identifier for the board
@@ -241,9 +241,9 @@ export function BoardEditorPage() {
                 </div>
                 <Switch
                   id="active"
-                  checked={formData.isActive}
+                  checked={formData.isEnabled}
                   onCheckedChange={(checked) =>
-                    setFormData((prev) => ({ ...prev, isActive: checked }))
+                    setFormData((prev) => ({ ...prev, isEnabled: checked }))
                   }
                   data-testid="switch-board-active"
                 />

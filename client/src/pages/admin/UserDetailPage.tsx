@@ -255,7 +255,7 @@ export function UserDetailPage() {
                   {userBoards.length > 0 ? (
                     userBoards.map((board) => (
                       <Badge key={board.id} variant="secondary" data-testid={`badge-board-${board.id}`}>
-                        {board.name}
+                        {board.displayName}
                       </Badge>
                     ))
                   ) : (
@@ -269,7 +269,7 @@ export function UserDetailPage() {
                   {userSubjects.length > 0 ? (
                     userSubjects.map((subject) => (
                       <Badge key={subject.id} variant="outline" data-testid={`badge-subject-${subject.id}`}>
-                        {subject.name}
+                        {subject.subjectName}
                       </Badge>
                     ))
                   ) : (

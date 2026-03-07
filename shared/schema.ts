@@ -362,6 +362,171 @@ export const feedback = pgTable("feedback", {
 }));
 
 // ===========================================
+// MCQ SYSTEM TABLES
+// ===========================================
+
+// Difficulty enum for MCQ questions
+export const mcqDifficultyEnum = pgEnum("mcq_difficulty", ["easy", "medium", "hard"]);
+
+// Source enum for how a question was created
+export const mcqSourceEnum = pgEnum("mcq_source", ["manual", "extracted", "ai_generated"]);
+
+// Session mode enum
+export const mcqSessionModeEnum = pgEnum("mcq_session_mode", ["practice", "timed", "exam", "adaptive"]);
+
+// MCQ Question Bank — standalone questions independent from quiz-bound questions
+export const mcqQuestions = pgTable("mcq_questions", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  subjectId: varchar("subject_id", { length: 36 }).notNull().references(() => subjects.id, { onDelete: "cascade" }),
+  topicId: varchar("topic_id", { length: 36 }),
+  boardId: varchar("board_id", { length: 36 }).references(() => boards.id),
+  qualId: varchar("qual_id", { length: 36 }).references(() => qualifications.id),
+  branchId: varchar("branch_id", { length: 36 }).references(() => branches.id),
+
+  // Question content
+  questionText: text("question_text").notNull(),
+  options: jsonb("options").notNull(), // Array of { label: "A", text: "..." }
+  correctOptionIndex: integer("correct_option_index").notNull(),
+  explanation: text("explanation"),
+
+  // Classification metadata
+  difficulty: mcqDifficultyEnum("difficulty").notNull().default("medium"),
+  source: mcqSourceEnum("source").notNull().default("manual"),
+  sourceFileId: varchar("source_file_id", { length: 36 }).references(() => fileAssets.id, { onDelete: "set null" }),
+
+  // Past paper origin (if extracted from a past paper)
+  year: integer("year"),
+  session: text("session"), // e.g. "May/June", "Oct/Nov"
+  paper: integer("paper"),
+  variant: integer("variant"),
+
+  // Organization
+  tags: text("tags").array(), // e.g. ["stoichiometry", "mole-concept"]
+  bloomsLevel: text("blooms_level"), // remember, understand, apply, analyze, evaluate, create
+  marks: integer("marks").notNull().default(1),
+
+  // Quality control
+  isVerified: boolean("is_verified").notNull().default(false),
+  verifiedBy: varchar("verified_by", { length: 36 }),
+  confidenceScore: integer("confidence_score"), // 0-100, used for AI-generated questions
+
+  // Audit
+  createdBy: varchar("created_by", { length: 36 }).references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  subjectIdx: index("idx_mcq_questions_subject").on(table.subjectId),
+  topicIdx: index("idx_mcq_questions_topic").on(table.topicId),
+  difficultyIdx: index("idx_mcq_questions_difficulty").on(table.difficulty),
+  sourceIdx: index("idx_mcq_questions_source").on(table.source),
+  boardSubjectIdx: index("idx_mcq_questions_board_subject").on(table.boardId, table.subjectId),
+  verifiedIdx: index("idx_mcq_questions_verified").on(table.isVerified),
+}));
+
+// MCQ Attempts — individual question-level attempt tracking
+export const mcqAttempts = pgTable("mcq_attempts", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  questionId: varchar("question_id", { length: 36 }).notNull().references(() => mcqQuestions.id, { onDelete: "cascade" }),
+  sessionId: varchar("session_id", { length: 36 }), // FK to mcqSessions, nullable for standalone
+
+  selectedOptionIndex: integer("selected_option_index").notNull(),
+  isCorrect: boolean("is_correct").notNull(),
+  timeSpentMs: integer("time_spent_ms"), // milliseconds spent on this question
+
+  // AI-generated feedback (if solver is enabled)
+  aiFeedback: text("ai_feedback"),
+
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  userIdx: index("idx_mcq_attempts_user").on(table.userId),
+  questionIdx: index("idx_mcq_attempts_question").on(table.questionId),
+  sessionIdx: index("idx_mcq_attempts_session").on(table.sessionId),
+  userQuestionIdx: index("idx_mcq_attempts_user_question").on(table.userId, table.questionId),
+}));
+
+// MCQ Sessions — groups attempts into practice sessions
+export const mcqSessions = pgTable("mcq_sessions", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  subjectId: varchar("subject_id", { length: 36 }).notNull().references(() => subjects.id, { onDelete: "cascade" }),
+  topicId: varchar("topic_id", { length: 36 }),
+
+  mode: mcqSessionModeEnum("mode").notNull().default("practice"),
+  totalQuestions: integer("total_questions").notNull().default(0),
+  answeredCount: integer("answered_count").notNull().default(0),
+  correctCount: integer("correct_count").notNull().default(0),
+  score: integer("score"), // percentage 0-100
+
+  // Session configuration
+  settings: jsonb("settings"), // { difficulty, timeLimit, questionCount, topicIds }
+
+  startedAt: timestamp("started_at").defaultNow(),
+  completedAt: timestamp("completed_at"),
+}, (table) => ({
+  userIdx: index("idx_mcq_sessions_user").on(table.userId),
+  subjectIdx: index("idx_mcq_sessions_subject").on(table.subjectId),
+  userSubjectIdx: index("idx_mcq_sessions_user_subject").on(table.userId, table.subjectId),
+}));
+
+// MCQ Topic Stats — aggregated per-user, per-topic performance (SIE foundation)
+export const mcqTopicStats = pgTable("mcq_topic_stats", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  subjectId: varchar("subject_id", { length: 36 }).notNull().references(() => subjects.id, { onDelete: "cascade" }),
+  topicId: varchar("topic_id", { length: 36 }).notNull(),
+
+  totalAttempted: integer("total_attempted").notNull().default(0),
+  totalCorrect: integer("total_correct").notNull().default(0),
+  avgTimeMs: integer("avg_time_ms"),
+  lastAttemptedAt: timestamp("last_attempted_at"),
+
+  // Student Intelligence Engine fields
+  masteryScore: integer("mastery_score").notNull().default(0), // 0-100
+  streak: integer("streak").notNull().default(0), // consecutive correct
+  longestStreak: integer("longest_streak").notNull().default(0),
+  confidenceLevel: text("confidence_level").default("unknown"), // low, medium, high
+
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  userSubjectTopicIdx: uniqueIndex("idx_mcq_topic_stats_unique").on(table.userId, table.subjectId, table.topicId),
+  masteryIdx: index("idx_mcq_topic_stats_mastery").on(table.userId, table.masteryScore),
+}));
+
+// ===========================================
+// STUDENT REGISTRATION - Detailed student profile after login
+// ===========================================
+export const studentRegistrations = pgTable("student_registrations", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+
+  // Personal Information
+  name: text("name").notNull(),
+  fatherName: text("father_name"),
+  age: integer("age"),
+  phoneNumber: text("phone_number"),
+
+  // Academic Information
+  board: text("board"), // e.g., "CAIE", "Edexcel", "AQA", "IB"
+  qualifications: text("qualifications"), // e.g., "IGCSE", "O-Level", "A-Level", "IB Diploma"
+  subject: text("subject"), // Primary subject of interest
+  schoolName: text("school_name"),
+
+  // IP Address and metadata
+  ipAddress: text("ip_address"), // Student's IP address at registration
+  userAgent: text("user_agent"), // Browser user agent
+  registrationCompletedAt: timestamp("registration_completed_at").defaultNow(),
+
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  userIdIdx: uniqueIndex("idx_student_registrations_user").on(table.userId),
+  boardIdx: index("idx_student_registrations_board").on(table.board),
+  phoneIdx: index("idx_student_registrations_phone").on(table.phoneNumber),
+}));
+
+// ===========================================
 // ZOD SCHEMAS FOR VALIDATION
 // ===========================================
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
@@ -376,11 +541,35 @@ export const insertAssignmentSchema = createInsertSchema(assignments).omit({ id:
 export const insertSubmissionSchema = createInsertSchema(submissions).omit({ id: true });
 export const insertAnnouncementSchema = createInsertSchema(announcements).omit({ id: true, createdAt: true });
 
+export const insertStudentRegistrationSchema = createInsertSchema(studentRegistrations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  // All fields except userId are optional on the insert schema
+  // so the student can save progressively — DB constraint won't fire
+  // because upsert sets updatedAt; actual required-field UX is handled by the form
+  fatherName: z.string().optional(),
+  age: z.number().int().positive().optional(),
+  phoneNumber: z.string().optional(),
+  board: z.string().optional(),
+  qualifications: z.string().optional(),
+  subject: z.string().optional(),
+  schoolName: z.string().optional(),
+  ipAddress: z.string().optional().nullable(),
+  userAgent: z.string().optional().nullable(),
+  registrationCompletedAt: z.date().optional(),
+});
+
 export const insertSystemEventSchema = createInsertSchema(systemEvents).omit({ id: true, createdAt: true });
 export const insertQualificationSchema = createInsertSchema(qualifications);
 export const insertBranchSchema = createInsertSchema(branches);
 export const insertResourceCategorySchema = createInsertSchema(resourceCategories);
-export const insertResourceNodeSchema = createInsertSchema(resourceNodes);
+export const insertResourceNodeSchema = createInsertSchema(resourceNodes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
 export const insertFileAssetSchema = createInsertSchema(fileAssets);
 
 // Onboarding schemas
@@ -391,11 +580,19 @@ export const insertUserSubjectSchema = createInsertSchema(userSubjects).omit({ i
 // Feedback schema
 export const insertFeedbackSchema = createInsertSchema(feedback).omit({ id: true, createdAt: true });
 
+// MCQ System schemas
+export const insertMcqQuestionSchema = createInsertSchema(mcqQuestions).omit({ id: true, createdAt: true, updatedAt: true });
+export const insertMcqAttemptSchema = createInsertSchema(mcqAttempts).omit({ id: true, createdAt: true });
+export const insertMcqSessionSchema = createInsertSchema(mcqSessions).omit({ id: true });
+export const insertMcqTopicStatsSchema = createInsertSchema(mcqTopicStats).omit({ id: true, createdAt: true, updatedAt: true });
+
 // ===========================================
 // TYPE EXPORTS
 // ===========================================
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
+export type StudentRegistration = typeof studentRegistrations.$inferSelect;
+export type InsertStudentRegistration = z.infer<typeof insertStudentRegistrationSchema>;
 export type Board = typeof boards.$inferSelect;
 export type InsertBoard = z.infer<typeof insertBoardSchema>;
 export type Subject = typeof subjects.$inferSelect;
@@ -422,6 +619,7 @@ export type Qualification = typeof qualifications.$inferSelect;
 export type Branch = typeof branches.$inferSelect;
 export type ResourceCategory = typeof resourceCategories.$inferSelect;
 export type ResourceNode = typeof resourceNodes.$inferSelect;
+export type InsertResourceNode = z.infer<typeof insertResourceNodeSchema>;
 export type FileAsset = typeof fileAssets.$inferSelect;
 
 // Onboarding types
@@ -436,13 +634,27 @@ export type InsertUserSubject = z.infer<typeof insertUserSubjectSchema>;
 export type Feedback = typeof feedback.$inferSelect;
 export type InsertFeedback = z.infer<typeof insertFeedbackSchema>;
 
+// MCQ System types
+export type McqQuestion = typeof mcqQuestions.$inferSelect;
+export type InsertMcqQuestion = z.infer<typeof insertMcqQuestionSchema>;
+export type McqAttempt = typeof mcqAttempts.$inferSelect;
+export type InsertMcqAttempt = z.infer<typeof insertMcqAttemptSchema>;
+export type McqSession = typeof mcqSessions.$inferSelect;
+export type InsertMcqSession = z.infer<typeof insertMcqSessionSchema>;
+export type McqTopicStat = typeof mcqTopicStats.$inferSelect;
+export type InsertMcqTopicStat = z.infer<typeof insertMcqTopicStatsSchema>;
+
+export type McqDifficulty = "easy" | "medium" | "hard";
+export type McqSource = "manual" | "extracted" | "ai_generated";
+export type McqSessionMode = "practice" | "timed" | "exam" | "adaptive";
+
 export type UserRole = "student" | "teacher" | "admin";
 export type ResourceType = "past_paper" | "notes" | "video" | "worksheet";
 export type ContentStatus = "pending" | "approved" | "rejected";
 export type AssignmentStatus = "pending" | "submitted" | "graded";
 export type QuizType = "practice" | "mock";
 export type AnnouncementScope = "school" | "board" | "subject";
-export type FileType = "qp" | "ms" | "gt" | "er" | "in" | "ir" | "other";
+export type FileType = "qp" | "ms" | "gt" | "er" | "in" | "ir" | "ci" | "sf" | "pm" | "sm" | "sp" | "other";
 
 export const RESOURCE_TYPE_LABELS: Record<ResourceType, string> = {
   past_paper: "Past Paper",

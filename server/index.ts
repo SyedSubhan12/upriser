@@ -7,6 +7,11 @@ import createMemoryStore from "memorystore";
 import cors from "cors";
 import pgSession from "connect-pg-simple";
 import pg from "pg";
+import bcrypt from "bcrypt";
+import { randomUUID } from "crypto";
+import { eq } from "drizzle-orm";
+import { db, pool } from "./db";
+import { users } from "@shared/schema";
 
 declare module "express-session" {
   interface SessionData {
@@ -23,14 +28,29 @@ declare module "http" {
   }
 }
 
-// Allow CORS from the frontend
+// Allow CORS from the frontend (supports comma-separated origins)
+const allowedOrigins = (process.env.CLIENT_URL || "http://localhost:5173").split(',').map(o => o.trim());
+const isDevMode = process.env.NODE_ENV !== "production";
 app.use(cors({
-  origin: process.env.CLIENT_URL || "http://localhost:5173",
+  origin: (origin, callback) => {
+    // In development, allow all origins
+    if (isDevMode) {
+      callback(null, true);
+      return;
+    }
+    // Allow requests with no origin (e.g., mobile apps, curl)
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
 }));
 
 app.use(
   express.json({
+    limit: '1mb', // Prevent oversized JSON payloads
     verify: (req, _res, buf) => {
       req.rawBody = buf;
     },
@@ -43,23 +63,34 @@ const MemoryStore = createMemoryStore(session);
 const PgSessionStore = pgSession(session);
 const sessionStore = process.env.DATABASE_URL
   ? new PgSessionStore({
-    pool: new pg.Pool({ connectionString: process.env.DATABASE_URL }),
+    pool: pool,
     createTableIfMissing: true,
   })
   : new MemoryStore({
     checkPeriod: 86400000,
   });
 
+const isProduction = process.env.NODE_ENV === "production";
+
+// Session secret: require in production, allow insecure fallback only in dev
+if (!process.env.SESSION_SECRET && isProduction) {
+  console.error("FATAL: SESSION_SECRET must be set in production!");
+  process.exit(1);
+} else if (!process.env.SESSION_SECRET) {
+  console.warn("⚠️  WARNING: SESSION_SECRET not set. Using insecure default. Set SESSION_SECRET in production!");
+}
+
+
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || "upriser-dev-secret-key",
+    secret: process.env.SESSION_SECRET || "upriser-dev-secret-change-me",
     resave: false,
     saveUninitialized: false,
     store: sessionStore,
     cookie: {
-      secure: false, // set to true in production with HTTPS
+      secure: isProduction,
       httpOnly: true,
-      sameSite: "lax",
+      sameSite: isProduction ? "strict" : "lax",
       maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
     },
   }),
@@ -70,6 +101,23 @@ import { setupGoogleAuth, passport } from "./auth";
 setupGoogleAuth();
 app.use(passport.initialize());
 app.use(passport.session());
+
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "admin@upriser.com";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
+const ADMIN_NAME = process.env.ADMIN_NAME || "System Administrator";
+
+// Warn about default admin/teacher credentials
+if (!process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD) {
+  console.warn("⚠️  WARNING: ADMIN_EMAIL/ADMIN_PASSWORD not set. Using defaults. Set these in production!");
+}
+
+const TEACHER_EMAIL = process.env.TEACHER_EMAIL || "teacher@upriser.com";
+const TEACHER_PASSWORD = process.env.TEACHER_PASSWORD || "teacher123";
+const TEACHER_NAME = process.env.TEACHER_NAME || "Demo Teacher";
+
+if (!process.env.TEACHER_EMAIL || !process.env.TEACHER_PASSWORD) {
+  console.warn("⚠️  WARNING: TEACHER_EMAIL/TEACHER_PASSWORD not set. Using defaults. Set these in production!");
+}
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
@@ -98,25 +146,98 @@ app.use((req, res, next) => {
     if (path.startsWith("/api")) {
       let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
+        // Only log a truncated preview to avoid memory bloat
+        const preview = JSON.stringify(capturedJsonResponse).substring(0, 200);
+        logLine += ` :: ${preview}${preview.length >= 200 ? '...' : ''}`;
       }
-
       log(logLine);
     }
+    // Release reference to allow GC
+    capturedJsonResponse = undefined;
   });
 
   next();
 });
 
 (async () => {
+  try {
+    const existingAdmin = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, ADMIN_EMAIL))
+      .limit(1);
+
+    const hashedPassword = await bcrypt.hash(ADMIN_PASSWORD, 10);
+
+    if (existingAdmin.length > 0) {
+      await db
+        .update(users)
+        .set({
+          role: "admin",
+          isActive: true,
+          password: hashedPassword,
+          name: ADMIN_NAME,
+        })
+        .where(eq(users.id, existingAdmin[0].id));
+    } else {
+      await db.insert(users).values({
+        id: randomUUID(),
+        email: ADMIN_EMAIL,
+        password: hashedPassword,
+        name: ADMIN_NAME,
+        role: "admin",
+        authProvider: "local",
+        isActive: true,
+        createdAt: new Date(),
+      });
+    }
+    // Ensure Teacher user exists
+    const existingTeacher = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, TEACHER_EMAIL))
+      .limit(1);
+
+    const hashedTeacherPassword = await bcrypt.hash(TEACHER_PASSWORD, 10);
+
+    if (existingTeacher.length > 0) {
+      await db
+        .update(users)
+        .set({
+          role: "teacher",
+          isActive: true,
+          password: hashedTeacherPassword,
+          name: TEACHER_NAME,
+        })
+        .where(eq(users.id, existingTeacher[0].id));
+    } else {
+      await db.insert(users).values({
+        id: randomUUID(),
+        email: TEACHER_EMAIL,
+        password: hashedTeacherPassword,
+        name: TEACHER_NAME,
+        role: "teacher",
+        authProvider: "local",
+        isActive: true,
+        createdAt: new Date(),
+      });
+    }
+  } catch (error) {
+    console.error("Failed to ensure system users:", error);
+  }
+
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
 
-    res.status(status).json({ message });
-    throw err;
+    // Log the error but don't re-throw (that would crash the process)
+    console.error(`[ERROR] ${status} - ${message}`, err.stack || err);
+
+    if (!res.headersSent) {
+      res.status(status).json({ message });
+    }
   });
 
   // Setup Vite or static serving

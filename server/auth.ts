@@ -33,9 +33,10 @@ export function setupGoogleAuth() {
 
                         if (user) {
                             // Link Google account to existing user
+                            console.log(`Linking existing user ${email} to Google account: ${profile.id}`);
                             user = await storage.updateUser(user.id, {
                                 googleId: profile.id,
-                                authProvider: user.authProvider === "local" ? "local" : "google",
+                                authProvider: user.authProvider === "local" ? "both" : user.authProvider,
                             });
                         } else {
                             // Create new user with role determined from email
@@ -55,8 +56,13 @@ export function setupGoogleAuth() {
                         }
                     }
 
+                    if (user && !user.isActive) {
+                        console.warn(`[AUTH] Login attempt from disabled account: ${user.email} (${user.id})`);
+                    }
+
                     return done(null, user);
                 } catch (error) {
+                    console.error("[AUTH] Google Strategy error:", error);
                     return done(error as Error, undefined);
                 }
             }

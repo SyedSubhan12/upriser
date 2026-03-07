@@ -12,6 +12,7 @@ import {
   Moon,
   LogOut,
   GraduationCap,
+  Brain,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
@@ -38,6 +39,7 @@ const MENU_ITEMS = [
   { title: "Dashboard", url: "/teacher/dashboard", icon: LayoutDashboard },
   { title: "My Materials", url: "/teacher/materials", icon: FileText },
   { title: "Quizzes", url: "/teacher/quizzes", icon: HelpCircle },
+  { title: "MCQ Manager", url: "/teacher/mcq-manager", icon: Brain },
   { title: "Assignments", url: "/teacher/assignments", icon: ClipboardList },
   { title: "Analytics", url: "/teacher/analytics", icon: BarChart3 },
   { title: "Announcements", url: "/teacher/announcements", icon: Bell },

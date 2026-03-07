@@ -58,7 +58,7 @@ export function FileRow({ file, onView, onDownload, className }: FileRowProps) {
                 <p className="mt-0.5 text-sm text-muted-foreground">
                     {FILE_TYPE_LABELS[file.fileType]}
                     {file.paper && ` • Paper ${file.paper}`}
-                    {file.variant && ` Variant ${file.variant}`}
+                    {file.variant !== undefined && file.variant !== null && ` Variant ${file.variant}`}
                 </p>
             </div>
 

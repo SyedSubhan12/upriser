@@ -42,7 +42,7 @@ function AnnouncementCard({ announcement }: AnnouncementCardProps) {
       case "board":
         return "Board";
       case "subject":
-        return subject?.name || "Subject";
+        return subject?.subjectName || "Subject";
       default:
         return scope;
     }
