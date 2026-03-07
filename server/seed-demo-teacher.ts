@@ -16,7 +16,7 @@ import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
 
 // Demo teacher credentials (development only)
-const TEACHER_EMAIL = "teacher@upriser.com";
+const TEACHER_EMAIL = "teacher@serprep.com";
 const TEACHER_PASSWORD = "teacher123";
 const TEACHER_NAME = "Demo Teacher";
 

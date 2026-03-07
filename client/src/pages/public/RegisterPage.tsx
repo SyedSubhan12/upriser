@@ -63,10 +63,10 @@ export function RegisterPage() {
 
       if (response.ok) {
         const user = await response.json();
-        localStorage.setItem("upriser_user", JSON.stringify(user));
+        localStorage.setItem("serprep_user", JSON.stringify(user));
         toast({
           title: "Account created!",
-          description: "Welcome to Upriser. Redirecting to your dashboard...",
+          description: "Welcome to SERPREP. Redirecting to your dashboard...",
         });
         if (user?.role === "student") {
           window.location.href = "/student/dashboard";
@@ -104,7 +104,7 @@ export function RegisterPage() {
               Create Account
             </CardTitle>
             <CardDescription data-testid="text-register-description">
-              Join Upriser and start your learning journey
+              Join SERPREP and start your learning journey
             </CardDescription>
           </CardHeader>
 

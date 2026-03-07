@@ -97,7 +97,7 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
                     transition={{ delay: 0.3, duration: 0.5 }}
                 >
                     <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
-                        Upriser
+                        SERPREP
                     </h1>
                     <motion.p
                         className="mt-2 text-slate-400 text-sm"

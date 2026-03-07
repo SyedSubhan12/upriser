@@ -83,7 +83,7 @@ if (!process.env.SESSION_SECRET && isProduction) {
 
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || "upriser-dev-secret-change-me",
+    secret: process.env.SESSION_SECRET || "serprep-dev-secret-change-me",
     resave: false,
     saveUninitialized: false,
     store: sessionStore,
@@ -102,7 +102,7 @@ setupGoogleAuth();
 app.use(passport.initialize());
 app.use(passport.session());
 
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "admin@upriser.com";
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "admin@serprep.com";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
 const ADMIN_NAME = process.env.ADMIN_NAME || "System Administrator";
 
@@ -111,7 +111,7 @@ if (!process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD) {
   console.warn("⚠️  WARNING: ADMIN_EMAIL/ADMIN_PASSWORD not set. Using defaults. Set these in production!");
 }
 
-const TEACHER_EMAIL = process.env.TEACHER_EMAIL || "teacher@upriser.com";
+const TEACHER_EMAIL = process.env.TEACHER_EMAIL || "teacher@serprep.com";
 const TEACHER_PASSWORD = process.env.TEACHER_PASSWORD || "teacher123";
 const TEACHER_NAME = process.env.TEACHER_NAME || "Demo Teacher";
 

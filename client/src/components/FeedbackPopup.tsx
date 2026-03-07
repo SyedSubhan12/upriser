@@ -97,7 +97,7 @@ export function FeedbackPopup({ delayMinutes = 2 }: FeedbackPopupProps) {
                         How's your experience?
                     </DialogTitle>
                     <DialogDescription className="text-center">
-                        We'd love to hear your feedback on Upriser!
+                        We'd love to hear your feedback on SERPREP!
                     </DialogDescription>
                 </DialogHeader>
 

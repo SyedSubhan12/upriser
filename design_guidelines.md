@@ -1,4 +1,4 @@
-# Upriser Educational Platform - Design Guidelines
+# SERPREP Educational Platform - Design Guidelines
 
 ## Design Approach
 This is a utility-focused educational platform requiring a clean, professional design system that prioritizes usability, learnability, and consistency across student, teacher, and admin interfaces. The design follows a modern, school-friendly aesthetic with clear information hierarchy.

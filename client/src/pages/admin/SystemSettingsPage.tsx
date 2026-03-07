@@ -17,8 +17,8 @@ import {
 
 export function SystemSettingsPage() {
   const [generalSettings, setGeneralSettings] = useState({
-    siteName: "Upriser Educational Platform",
-    supportEmail: "support@upriser.edu",
+    siteName: "SERPREP Educational Platform",
+    supportEmail: "support@serprep.edu",
   });
 
   const [notificationSettings, setNotificationSettings] = useState({

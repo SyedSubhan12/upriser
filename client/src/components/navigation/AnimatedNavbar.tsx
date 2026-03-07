@@ -20,6 +20,8 @@ import {
   Menu,
   X,
   ChevronRight,
+  Sun,
+  Moon,
   FileText,
   Brain,
   Award,
@@ -28,6 +30,7 @@ import {
   BarChart3
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useTheme } from '@/context/ThemeContext';
 
 // Types for navigation
 interface NavLink {
@@ -189,6 +192,7 @@ export const AnimatedNavbar: React.FC = () => {
 
   const [location, setLocation] = useLocation();
   const { user, isAuthenticated, logout } = useAuth();
+  const { theme, toggleTheme } = useTheme();
 
   // Build menu items based on auth state and role
   const getMenuItems = (): MenuItem[] => {
@@ -427,7 +431,7 @@ export const AnimatedNavbar: React.FC = () => {
             <div className="flex items-center gap-2 cursor-pointer">
               <GraduationCap className="h-7 w-7 text-primary" />
               <span className="text-xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-                Upriser
+                SERPREP
               </span>
             </div>
           </Link>
@@ -510,6 +514,18 @@ export const AnimatedNavbar: React.FC = () => {
                 </Button>
               </>
             )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleTheme}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              {theme === "light" ? (
+                <Moon className="h-4 w-4" />
+              ) : (
+                <Sun className="h-4 w-4" />
+              )}
+            </Button>
           </div>
 
           {/* Mobile Menu Button */}
@@ -699,15 +715,29 @@ export const AnimatedNavbar: React.FC = () => {
               <div className="flex items-center justify-between p-4 border-b">
                 <div className="flex items-center gap-2">
                   <GraduationCap className="h-6 w-6 text-primary" />
-                  <span className="text-lg font-bold text-foreground">Upriser</span>
+                  <span className="text-lg font-bold text-foreground">SERPREP</span>
                 </div>
-                <button
-                  className="p-2 rounded-md hover:bg-accent transition-colors"
-                  onClick={toggleMobileMenu}
-                  aria-label="Close mobile menu"
-                >
-                  <X className="w-6 h-6 text-foreground" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={toggleTheme}
+                    className="text-foreground"
+                  >
+                    {theme === "light" ? (
+                      <Moon className="h-5 w-5" />
+                    ) : (
+                      <Sun className="h-5 w-5" />
+                    )}
+                  </Button>
+                  <button
+                    className="p-2 rounded-md hover:bg-accent transition-colors"
+                    onClick={toggleMobileMenu}
+                    aria-label="Close mobile menu"
+                  >
+                    <X className="w-6 h-6 text-foreground" />
+                  </button>
+                </div>
               </div>
 
               {/* Mobile User Info */}

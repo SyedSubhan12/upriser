@@ -39,7 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Ignore errors during logout
     }
     setUser(null);
-    localStorage.removeItem("upriser_user");
+    localStorage.removeItem("serprep_user");
   }, []);
 
   // Check authentication status
@@ -50,19 +50,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (response.ok) {
           const userData = await response.json();
           setUser(userData);
-          localStorage.setItem("upriser_user", JSON.stringify(userData));
+          localStorage.setItem("serprep_user", JSON.stringify(userData));
         } else {
           // Any non-OK status (401, 403, etc.) should be treated as logged out
           setUser(null);
-          localStorage.removeItem("upriser_user");
+          localStorage.removeItem("serprep_user");
         }
       } catch {
-        const storedUser = localStorage.getItem("upriser_user");
+        const storedUser = localStorage.getItem("serprep_user");
         if (storedUser) {
           try {
             setUser(JSON.parse(storedUser));
           } catch {
-            localStorage.removeItem("upriser_user");
+            localStorage.removeItem("serprep_user");
           }
         }
       } finally {
@@ -93,7 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const userData = await response.json();
           if (JSON.stringify(userData) !== JSON.stringify(user)) {
             setUser(userData);
-            localStorage.setItem("upriser_user", JSON.stringify(userData));
+            localStorage.setItem("serprep_user", JSON.stringify(userData));
           }
         }
       } catch (error) {
@@ -113,7 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const response = await apiRequest("POST", "/api/auth/login", { email, password });
       const userData = await response.json();
       setUser(userData);
-      localStorage.setItem("upriser_user", JSON.stringify(userData));
+      localStorage.setItem("serprep_user", JSON.stringify(userData));
       setIsLoading(false);
       return { success: true };
     } catch (error) {
@@ -127,7 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser((prev) => {
       if (!prev) return null;
       const updated = { ...prev, ...updates };
-      localStorage.setItem("upriser_user", JSON.stringify(updated));
+      localStorage.setItem("serprep_user", JSON.stringify(updated));
       return updated;
     });
   }, []);

@@ -1,6 +1,6 @@
-# Upriser API Reference
+# SERPREP API Reference
 
-Complete API documentation for the Upriser Educational Management Platform.
+Complete API documentation for the SERPREP Educational Management Platform.
 
 ## Table of Contents
 
@@ -76,7 +76,7 @@ POST /api/auth/login
 Content-Type: application/json
 
 {
-  "email": "admin@upriser.com",
+  "email": "admin@serprep.com",
   "password": "admin123"
 }
 ```
@@ -85,7 +85,7 @@ Content-Type: application/json
 ```json
 {
   "id": "622fa070-4829-4015-95a0-4fba9a1bea25",
-  "email": "admin@upriser.com",
+  "email": "admin@serprep.com",
   "name": "System Administrator",
   "role": "admin",
   "avatar": null,
@@ -124,7 +124,7 @@ Cookie: connect.sid=s%3A...
 ```json
 {
   "id": "622fa070-4829-4015-95a0-4fba9a1bea25",
-  "email": "admin@upriser.com",
+  "email": "admin@serprep.com",
   "name": "System Administrator",
   "role": "admin",
   "avatar": null,
@@ -395,7 +395,7 @@ Cookie: connect.sid=s%3A...
 {
   "id": "622fa070-4829-4015-95a0-4fba9a1bea25",
   "name": "System Administrator",
-  "email": "admin@upriser.com",
+  "email": "admin@serprep.com",
   "role": "admin",
   "avatar": null,
   "board": null,
@@ -829,7 +829,7 @@ Real-time updates via WebSockets:
 For API support:
 - Documentation: This file
 - Issues: GitHub Issues
-- Email: api-support@upriser.com
+- Email: api-support@serprep.com
 
 ---
 

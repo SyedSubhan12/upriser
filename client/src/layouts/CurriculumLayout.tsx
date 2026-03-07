@@ -21,11 +21,11 @@ export function CurriculumLayout({ children }: CurriculumLayoutProps) {
                         <div className="flex items-center gap-2">
                             <GraduationCap className="h-5 w-5 text-muted-foreground" />
                             <span className="text-sm text-muted-foreground">
-                                Upriser Educational Platform
+                                SERPREP Educational Platform
                             </span>
                         </div>
                         <p className="text-sm text-muted-foreground">
-                            © {new Date().getFullYear()} Upriser. All rights reserved.
+                            © {new Date().getFullYear()} SERPREP. All rights reserved.
                         </p>
                     </div>
                 </div>

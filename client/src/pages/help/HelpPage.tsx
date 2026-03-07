@@ -27,7 +27,7 @@ export function HelpPage() {
                         Help Center
                     </h1>
                     <p className="mt-3 text-lg text-muted-foreground">
-                        Learn how to use Upriser and find answers to common questions
+                        Learn how to use SERPREP and find answers to common questions
                     </p>
                 </div>
 
@@ -37,7 +37,7 @@ export function HelpPage() {
                     <HelpSection
                         icon={Info}
                         title="How to Use the App"
-                        description="Get started with Upriser"
+                        description="Get started with SERPREP"
                     >
                         <div className="space-y-4">
                             <div className="rounded-lg border p-4">
@@ -128,8 +128,8 @@ export function HelpPage() {
                     >
                         <div className="space-y-2">
                             <FAQItem
-                                question="Is Upriser free to use?"
-                                answer="Yes! Upriser is completely free to access. Browse all curricula, subjects, and resources without any subscription or payment."
+                                question="Is SERPREP free to use?"
+                                answer="Yes! SERPREP is completely free to access. Browse all curricula, subjects, and resources without any subscription or payment."
                             />
                             <FAQItem
                                 question="How are the resources organized?"
@@ -175,10 +175,10 @@ export function HelpPage() {
                                         <div>
                                             <p className="font-medium">Email Support</p>
                                             <a
-                                                href="mailto:support@upriser.com"
+                                                href="mailto:support@serprep.com"
                                                 className="text-sm text-primary hover:underline"
                                             >
-                                                support@upriser.com
+                                                support@serprep.com
                                             </a>
                                         </div>
                                     </CardContent>

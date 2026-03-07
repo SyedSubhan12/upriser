@@ -81,7 +81,7 @@ export function TeacherLayout({ children }: TeacherLayoutProps) {
             <Link href="/teacher/dashboard" data-testid="link-teacher-logo">
               <div className="flex items-center gap-2 px-2 py-1">
                 <GraduationCap className="h-6 w-6" />
-                <span className="text-lg font-semibold">Upriser</span>
+                <span className="text-lg font-semibold">SERPREP</span>
               </div>
             </Link>
           </SidebarHeader>

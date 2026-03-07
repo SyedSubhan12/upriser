@@ -72,7 +72,7 @@ export const Header = () => {
                             <Link href="/">
                                 <div className="flex gap-2 items-center cursor-pointer">
                                     <GraduationCap className="h-6 w-6 text-primary" />
-                                    <p className='font-semibold text-xl tracking-tighter'>Upriser</p>
+                                    <p className='font-semibold text-xl tracking-tighter'>SERPREP</p>
                                 </div>
                             </Link>
 
