@@ -8,13 +8,13 @@
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
 import multer from "multer";
-import * as mcqStorage from "./mcq-storage";
-import * as mcqAI from "./services/mcq-ai";
-import * as mcqExtractor from "./services/mcq-extractor";
-import * as SIE from "./services/student-intelligence";
-import { requireAuth, requireRole } from "./middleware/rbac";
-import { apiLimiter } from "./middleware/rate-limit";
-import { storage } from "./storage";
+import * as mcqStorage from "./mcq-storage.js";
+import * as mcqAI from "./services/mcq-ai.js";
+import * as mcqExtractor from "./services/mcq-extractor.js";
+import * as SIE from "./services/student-intelligence.js";
+import { requireAuth, requireRole } from "./middleware/rbac.js";
+import { apiLimiter } from "./middleware/rate-limit.js";
+import { storage } from "./storage.js";
 
 // Multer in-memory storage for PDF uploads (max 20MB)
 const upload = multer({

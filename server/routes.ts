@@ -4,16 +4,16 @@ import path from "path";
 import fs from "fs";
 import multer from "multer";
 
-import { storage } from "./storage";
-import { db } from "./db";
+import { storage } from "./storage.js";
+import { db } from "./db.js";
 import { z } from "zod";
-import { passport } from "./auth";
+import { passport } from "./auth.js";
 import bcrypt from "bcryptjs";
-import { registerAdminRoutes } from "./admin-routes";
-import { registerMcqRoutes } from "./mcq-routes";
-import { requireAuth, requireRole } from "./middleware/rbac";
-import { authLimiter, apiLimiter } from "./middleware/rate-limit";
-import { uploadPdf, validatePdf, checkDuplicate, buildObjectKey, getPublicUrl, enrichFileWithUrl, deleteFile } from "./supabase-storage";
+import { registerAdminRoutes } from "./admin-routes.js";
+import { registerMcqRoutes } from "./mcq-routes.js";
+import { requireAuth, requireRole } from "./middleware/rbac.js";
+import { authLimiter, apiLimiter } from "./middleware/rate-limit.js";
+import { uploadPdf, validatePdf, checkDuplicate, buildObjectKey, getPublicUrl, enrichFileWithUrl, deleteFile } from "./supabase-storage.js";
 
 // Configure multer for file uploads (in-memory storage)
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });

@@ -1,8 +1,8 @@
 import passport from "passport";
 import { Strategy as GoogleStrategy } from "passport-google-oauth20";
-import { storage } from "./storage";
+import { storage } from "./storage.js";
 import { randomUUID } from "crypto";
-import { determineRoleFromEmail } from "./role-manager";
+import { determineRoleFromEmail } from "./role-manager.js";
 
 export function setupGoogleAuth() {
     if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {

@@ -1,8 +1,8 @@
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
-import { storage } from "./storage";
-import { requireAuth, requireRole } from "./middleware/rbac";
-import { createSystemEvent, getRecentSystemEvents } from "./system-events";
+import { storage } from "./storage.js";
+import { requireAuth, requireRole } from "./middleware/rbac.js";
+import { createSystemEvent, getRecentSystemEvents } from "./system-events.js";
 import type { User, Board, Material } from "@shared/schema";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";

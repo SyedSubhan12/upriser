@@ -20,7 +20,7 @@ import {
   qualifications, branches, subjectGroups, resourceCategories, resourceNodes, fileAssets,
   userProfiles, userPreferences, userSubjects, feedback, studentRegistrations
 } from "@shared/schema";
-import { db } from "./db";
+import { db } from "./db.js";
 import { eq, and, desc, isNull, sql, count, or } from "drizzle-orm";
 import { randomUUID } from "crypto";
 

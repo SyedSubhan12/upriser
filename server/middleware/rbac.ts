@@ -6,8 +6,8 @@
  */
 
 import { Request, Response, NextFunction } from "express";
-import { storage } from "../storage";
-import { UserRole, isAuthorized } from "../role-manager";
+import { storage } from "../storage.js";
+import { UserRole, isAuthorized } from "../role-manager.js";
 
 /**
  * Extend Express Request to include user

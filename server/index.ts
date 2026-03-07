@@ -1,6 +1,6 @@
 import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
+import { registerRoutes } from "./routes.js";
 import { createServer } from "http";
 import session from "express-session";
 import createMemoryStore from "memorystore";
@@ -9,11 +9,11 @@ import pgSession from "connect-pg-simple";
 import pg from "pg";
 import { randomUUID } from "crypto";
 import { eq } from "drizzle-orm";
-import { db, pool } from "./db";
+import { db, pool } from "./db.js";
 import { users } from "@shared/schema";
-import { passport } from "./auth";
+import { passport } from "./auth.js";
 import bcrypt from "bcryptjs";
-import { registerAdminRoutes } from "./admin-routes";
+import { registerAdminRoutes } from "./admin-routes.js";
 
 declare module "express-session" {
   interface SessionData {
@@ -101,7 +101,7 @@ app.use(
 );
 
 // Initialize Passport for Google OAuth
-import { setupGoogleAuth } from "./auth";
+import { setupGoogleAuth } from "./auth.js";
 setupGoogleAuth();
 app.use(passport.initialize());
 app.use(passport.session());
@@ -254,11 +254,11 @@ export async function initializeServer() {
   });
 
   if (app.get("env") === "development") {
-    const { setupVite } = await import("./vite");
+    const { setupVite } = await import("./vite.js");
     await setupVite(httpServer, app);
   } else if (process.env.VERCEL !== "1") {
     // In production (non-Vercel), serve static files from the dist folder
-    const { serveStatic } = await import("./static");
+    const { serveStatic } = await import("./static.js");
     serveStatic(app);
   }
 

@@ -5,7 +5,8 @@ import {
     type McqTopicStat, type InsertMcqTopicStat,
     mcqQuestions, mcqAttempts, mcqSessions, mcqTopicStats,
 } from "@shared/schema";
-import { db } from "./db";
+import viteConfig from "../vite.config.js";
+import { db } from "./db.js";
 import { eq, and, desc, sql, count, inArray, ilike, asc } from "drizzle-orm";
 import { randomUUID } from "crypto";
 

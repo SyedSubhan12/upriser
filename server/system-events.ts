@@ -1,4 +1,4 @@
-import { db } from "./db";
+import { db } from "./db.js";
 import { systemEvents, type SystemEvent } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { desc } from "drizzle-orm";

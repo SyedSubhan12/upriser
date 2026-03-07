@@ -9,7 +9,7 @@
  * 5. Generates personalized study recommendations
  */
 
-import * as mcqStorage from "../mcq-storage";
+import * as mcqStorage from "../mcq-storage.js";
 import type { McqTopicStat, McqQuestion } from "@shared/schema";
 
 // ============================================================================
