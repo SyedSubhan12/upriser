@@ -20,6 +20,9 @@ declare module "express-session" {
 }
 
 export const app = express();
+if (process.env.VERCEL === "1" || process.env.NODE_ENV === "production") {
+  app.set("trust proxy", 1);
+}
 export const httpServer = createServer(app);
 
 declare module "http" {
@@ -88,7 +91,7 @@ app.use(
     saveUninitialized: false,
     store: sessionStore,
     cookie: {
-      secure: isProduction,
+      secure: isProduction || process.env.VERCEL === "1",
       httpOnly: true,
       sameSite: isProduction ? "strict" : "lax",
       maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
@@ -162,8 +165,10 @@ app.use((req, res, next) => {
 let isInitialized = false;
 export async function initializeServer() {
   if (isInitialized) return;
+  log("Initializing server...");
 
   try {
+    log("Ensuring system users...");
     const existingAdmin = await db
       .select()
       .from(users)
@@ -229,7 +234,9 @@ export async function initializeServer() {
     console.error("Failed to ensure system users:", error);
   }
 
+  log("Registering routes...");
   await registerRoutes(httpServer, app);
+  log("Routes registered.");
 
   app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
