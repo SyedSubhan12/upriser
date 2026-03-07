@@ -13,7 +13,7 @@ import { db, pool } from "./db";
 import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { randomUUID } from "crypto";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 
 // ⚠️ CHANGE THESE VALUES TO YOUR ADMIN CREDENTIALS
 const ADMIN_EMAIL = "admin@serprep.com";  // <-- Change this to your email
@@ -56,7 +56,7 @@ async function seedAdmin() {
         } else {
             // Create new admin user with generated ID
             const adminId = randomUUID();
-            
+
             // Hash the password before storing
             const hashedPassword = await bcrypt.hash(ADMIN_PASSWORD, 10);
 

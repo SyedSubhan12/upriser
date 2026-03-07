@@ -13,7 +13,7 @@ import { db, pool } from "./db";
 import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { randomUUID } from "crypto";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 
 // Demo teacher credentials (development only)
 const TEACHER_EMAIL = "teacher@serprep.com";
@@ -53,7 +53,7 @@ async function seedDemoTeacher() {
     } else {
       // Create new demo teacher user with generated ID
       const teacherId = randomUUID();
-      
+
       // Hash the password before storing
       const hashedPassword = await bcrypt.hash(TEACHER_PASSWORD, 10);
 

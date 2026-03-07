@@ -4,7 +4,7 @@ import { storage } from "./storage";
 import { requireAuth, requireRole } from "./middleware/rbac";
 import { createSystemEvent, getRecentSystemEvents } from "./system-events";
 import type { User, Board, Material } from "@shared/schema";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import crypto from "crypto";
 
 const listUsersQuerySchema = z.object({
@@ -173,7 +173,7 @@ export function registerAdminRoutes(app: Express) {
       // Log user creation without exposing the password
       console.log(`[ADMIN] New user created: ${email} — temporary password was generated.`);
 
-      await createSystemEvent("NEW_USER", `${user.name} joined as a ${user.role}`, {
+      await createSystemEvent("NEW_USER", `${user.name} joined as a ${user.role} `, {
         userId: user.id,
         role: user.role,
       });
@@ -373,7 +373,7 @@ export function registerAdminRoutes(app: Express) {
       if (isEnabled !== undefined && existing.isEnabled !== updated.isEnabled) {
         await createSystemEvent(
           updated.isEnabled ? "BOARD_ACTIVATED" : "BOARD_DEACTIVATED",
-          `Board ${updated.displayName} was ${updated.isEnabled ? "activated" : "deactivated"}`,
+          `Board ${updated.displayName} was ${updated.isEnabled ? "activated" : "deactivated"} `,
           { boardId: updated.id },
         );
       }
