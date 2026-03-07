@@ -5,9 +5,9 @@
  * Uses the server-side admin client (service role key) for all operations.
  */
 
-import { supabaseAdmin, getSupabaseUrl } from './supabase';
-import { db } from './db';
-import { fileAssets } from '@shared/schema';
+import { supabaseAdmin, getSupabaseUrl } from './supabase.js';
+import { db } from './db.js';
+import { fileAssets } from '../shared/schema.js';
 import { eq } from 'drizzle-orm';
 
 const BUCKET_NAME = 'content';

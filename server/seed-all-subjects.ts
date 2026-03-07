@@ -11,7 +11,7 @@
  * Run with: npx tsx server/seed-all-subjects.ts
  */
 
-import { db } from "./db";
+import { db } from "./db.js";
 import { randomUUID } from "crypto";
 import { sql } from "drizzle-orm";
 import {
@@ -21,7 +21,7 @@ import {
     curriculumSubjects,
     curriculumSubjectGroups,
     curriculumResourceCategories,
-} from "@shared/curriculum-schema";
+} from "../shared/curriculum-schema.js";
 
 // ============================================================================
 // HELPER FUNCTIONS

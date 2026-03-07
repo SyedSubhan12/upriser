@@ -13,11 +13,11 @@
 import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
-import { db } from './db';
-import { boards, qualifications, subjects, resourceCategories, resourceNodes, fileAssets } from '@shared/schema';
+import { db } from './db.js';
+import { boards, qualifications, subjects, resourceCategories, resourceNodes, fileAssets } from '../shared/schema.js';
 import { eq, and, sql } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
-import { uploadPdf, checkDuplicate, getPublicUrl, sanitizeFilename } from './supabase-storage';
+import { uploadPdf, checkDuplicate, getPublicUrl, sanitizeFilename } from './supabase-storage.js';
 
 // ============================================================================
 // Configuration

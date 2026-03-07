@@ -8,11 +8,11 @@
  */
 
 import 'dotenv/config';
-import { db } from './db';
-import { fileAssets } from '@shared/schema';
+import { db } from './db.js';
+import { fileAssets } from '../shared/schema.js';
 import { eq, isNull, sql, count, sum, desc } from 'drizzle-orm';
-import { supabaseAdmin } from './supabase';
-import { deleteFile, listFiles } from './supabase-storage';
+import { supabaseAdmin } from './supabase.js';
+import { deleteFile, listFiles } from './supabase-storage.js';
 
 const BUCKET_NAME = 'content';
 

@@ -9,7 +9,7 @@
  */
 
 import "dotenv/config"; // Load environment variables first
-import { db, pool } from "./db";
+import { db, pool } from "./db.js";
 import { users } from "../shared/schema.js";
 import { eq } from "drizzle-orm";
 import { randomUUID } from "crypto";

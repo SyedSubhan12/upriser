@@ -7,7 +7,7 @@
  * - Example data: CAIE → IGCSE → Mathematics → Notes → file
  */
 
-import { db } from "./db";
+import { db } from "./db.js";
 import { randomUUID } from "crypto";
 import {
     curriculumBoards,
@@ -18,7 +18,7 @@ import {
     curriculumResourceCategories,
     curriculumResourceNodes,
     curriculumFileAssets,
-} from "@shared/curriculum-schema";
+} from "../shared/curriculum-schema.js";
 
 // ============================================================================
 // SEED DATA
