@@ -1,4 +1,4 @@
-import { app, initializeServer } from "../server/index";
+import { app, initializeServer } from "../server/index.js";
 
 export default async function handler(req: any, res: any) {
     await initializeServer();
