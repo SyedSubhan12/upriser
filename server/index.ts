@@ -75,10 +75,9 @@ const sessionStore = process.env.DATABASE_URL
 
 const isProduction = process.env.NODE_ENV === "production";
 
-// Session secret: require in production, allow insecure fallback only in dev
 if (!process.env.SESSION_SECRET && isProduction) {
-  console.error("FATAL: SESSION_SECRET must be set in production!");
-  process.exit(1);
+  // Don't process.exit(1) as it crashes Vercel silently. Throw instead.
+  throw new Error("FATAL: SESSION_SECRET must be set in production!");
 } else if (!process.env.SESSION_SECRET) {
   console.warn("⚠️  WARNING: SESSION_SECRET not set. Using insecure default. Set SESSION_SECRET in production!");
 }
@@ -168,67 +167,71 @@ export async function initializeServer() {
   log("Initializing server...");
 
   try {
-    log("Ensuring system users...");
-    const existingAdmin = await db
-      .select()
-      .from(users)
-      .where(eq(users.email, ADMIN_EMAIL))
-      .limit(1);
+    // Only seed users in local dev or if explicitly requested. 
+    // Skipping in Vercel production to keep cold starts under the 10s limit.
+    if (process.env.VERCEL !== "1") {
+      log("Ensuring system users...");
+      const existingAdmin = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, ADMIN_EMAIL))
+        .limit(1);
 
-    const hashedPassword = await bcrypt.hash(ADMIN_PASSWORD, 10);
+      const hashedPassword = await bcrypt.hash(ADMIN_PASSWORD, 10);
 
-    if (existingAdmin.length > 0) {
-      await db
-        .update(users)
-        .set({
-          role: "admin",
-          isActive: true,
+      if (existingAdmin.length > 0) {
+        await db
+          .update(users)
+          .set({
+            role: "admin",
+            isActive: true,
+            password: hashedPassword,
+            name: ADMIN_NAME,
+          })
+          .where(eq(users.id, existingAdmin[0].id));
+      } else {
+        await db.insert(users).values({
+          id: randomUUID(),
+          email: ADMIN_EMAIL,
           password: hashedPassword,
           name: ADMIN_NAME,
-        })
-        .where(eq(users.id, existingAdmin[0].id));
-    } else {
-      await db.insert(users).values({
-        id: randomUUID(),
-        email: ADMIN_EMAIL,
-        password: hashedPassword,
-        name: ADMIN_NAME,
-        role: "admin",
-        authProvider: "local",
-        isActive: true,
-        createdAt: new Date(),
-      });
-    }
-
-    const existingTeacher = await db
-      .select()
-      .from(users)
-      .where(eq(users.email, TEACHER_EMAIL))
-      .limit(1);
-
-    const hashedTeacherPassword = await bcrypt.hash(TEACHER_PASSWORD, 10);
-
-    if (existingTeacher.length > 0) {
-      await db
-        .update(users)
-        .set({
-          role: "teacher",
+          role: "admin",
+          authProvider: "local",
           isActive: true,
+          createdAt: new Date(),
+        });
+      }
+
+      const existingTeacher = await db
+        .select()
+        .from(users)
+        .where(eq(users.email, TEACHER_EMAIL))
+        .limit(1);
+
+      const hashedTeacherPassword = await bcrypt.hash(TEACHER_PASSWORD, 10);
+
+      if (existingTeacher.length > 0) {
+        await db
+          .update(users)
+          .set({
+            role: "teacher",
+            isActive: true,
+            password: hashedTeacherPassword,
+            name: TEACHER_NAME,
+          })
+          .where(eq(users.id, existingTeacher[0].id));
+      } else {
+        await db.insert(users).values({
+          id: randomUUID(),
+          email: TEACHER_EMAIL,
           password: hashedTeacherPassword,
           name: TEACHER_NAME,
-        })
-        .where(eq(users.id, existingTeacher[0].id));
-    } else {
-      await db.insert(users).values({
-        id: randomUUID(),
-        email: TEACHER_EMAIL,
-        password: hashedTeacherPassword,
-        name: TEACHER_NAME,
-        role: "teacher",
-        authProvider: "local",
-        isActive: true,
-        createdAt: new Date(),
-      });
+          role: "teacher",
+          authProvider: "local",
+          isActive: true,
+          createdAt: new Date(),
+        });
+      }
     }
   } catch (error) {
     console.error("Failed to ensure system users:", error);
