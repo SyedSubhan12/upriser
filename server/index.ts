@@ -10,7 +10,7 @@ import pg from "pg";
 import { randomUUID } from "crypto";
 import { eq } from "drizzle-orm";
 import { db, pool } from "./db.js";
-import { users } from "@shared/schema";
+import { users } from "../shared/schema.js";
 import { passport } from "./auth.js";
 import bcrypt from "bcryptjs";
 import { registerAdminRoutes } from "./admin-routes.js";

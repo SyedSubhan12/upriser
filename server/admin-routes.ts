@@ -3,7 +3,7 @@ import { z } from "zod";
 import { storage } from "./storage.js";
 import { requireAuth, requireRole } from "./middleware/rbac.js";
 import { createSystemEvent, getRecentSystemEvents } from "./system-events.js";
-import type { User, Board, Material } from "@shared/schema";
+import type { User, Board, Material } from "../shared/schema.js";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 

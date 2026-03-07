@@ -10,7 +10,7 @@
  */
 
 import * as mcqStorage from "../mcq-storage.js";
-import type { McqTopicStat, McqQuestion } from "@shared/schema";
+import type { McqTopicStat, McqQuestion } from "../../shared/schema.js";
 
 // ============================================================================
 // MASTERY LEVELS

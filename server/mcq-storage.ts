@@ -4,7 +4,7 @@ import {
     type McqSession, type InsertMcqSession,
     type McqTopicStat, type InsertMcqTopicStat,
     mcqQuestions, mcqAttempts, mcqSessions, mcqTopicStats,
-} from "@shared/schema";
+} from "../shared/schema.js";
 import viteConfig from "../vite.config.js";
 import { db } from "./db.js";
 import { eq, and, desc, sql, count, inArray, ilike, asc } from "drizzle-orm";

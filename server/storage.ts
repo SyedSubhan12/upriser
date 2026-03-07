@@ -19,7 +19,7 @@ import {
   users, boards, subjects, topics, materials, quizzes, questions, quizAttempts, assignments, submissions, announcements,
   qualifications, branches, subjectGroups, resourceCategories, resourceNodes, fileAssets,
   userProfiles, userPreferences, userSubjects, feedback, studentRegistrations
-} from "@shared/schema";
+} from "../shared/schema.js";
 import { db } from "./db.js";
 import { eq, and, desc, isNull, sql, count, or } from "drizzle-orm";
 import { randomUUID } from "crypto";

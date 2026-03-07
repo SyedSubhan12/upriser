@@ -35,7 +35,7 @@ import {
   insertFeedbackSchema,
   insertResourceNodeSchema,
   insertStudentRegistrationSchema
-} from "@shared/schema";
+} from "../shared/schema.js";
 
 export async function registerRoutes(
   httpServer: Server,
