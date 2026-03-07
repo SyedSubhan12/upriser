@@ -250,7 +250,8 @@ export async function initializeServer() {
   if (app.get("env") === "development") {
     const { setupVite } = await import("./vite");
     await setupVite(httpServer, app);
-  } else {
+  } else if (process.env.VERCEL !== "1") {
+    // In production (non-Vercel), serve static files from the dist folder
     const { serveStatic } = await import("./static");
     serveStatic(app);
   }
