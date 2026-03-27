@@ -10,11 +10,15 @@ if (!process.env.DATABASE_URL) {
     );
 }
 
+const isServerless = process.env.VERCEL === "1";
+
 export const pool = new pg.Pool({
     connectionString: process.env.DATABASE_URL,
-    max: 10,                    // Reduced pool size for serverless
-    idleTimeoutMillis: 30000,   // Close idle connections after 30s
-    connectionTimeoutMillis: 5000, // Fail fast if can't connect in 5s
+    // In serverless (Vercel), each lambda is isolated — use a single connection
+    // to avoid exhausting Supabase's connection pool limit.
+    max: isServerless ? 1 : 10,
+    idleTimeoutMillis: isServerless ? 10000 : 30000,
+    connectionTimeoutMillis: 5000,
     ssl: {
         rejectUnauthorized: false
     }
@@ -25,4 +29,6 @@ pool.on('error', (err) => {
     console.error('Unexpected database pool error:', err);
 });
 
-export const db = drizzle(pool, { schema });
+// prepare: false is required when using Supabase Transaction mode (port 6543)
+// because PgBouncer does not support prepared statements in transaction mode.
+export const db = drizzle(pool, { schema, logger: false });
