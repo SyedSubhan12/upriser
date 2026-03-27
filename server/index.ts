@@ -83,10 +83,16 @@ app.use(express.urlencoded({ extended: false }));
 
 const MemoryStore = createMemoryStore(session);
 const PgSessionStore = pgSession(session);
-const sessionStore = process.env.DATABASE_URL
+
+const isVercel = process.env.VERCEL === "1";
+
+// On Vercel (serverless), use MemoryStore — sessions are per-lambda-instance anyway,
+// and connect-pg-simple's table-check query causes cold-start timeouts.
+// On long-running servers, use PgStore for persistent sessions.
+const sessionStore = (!isVercel && process.env.DATABASE_URL)
   ? new PgSessionStore({
     pool: pool,
-    createTableIfMissing: true,
+    createTableIfMissing: false, // table must exist; avoids slow DDL on startup
   })
   : new MemoryStore({
     checkPeriod: 86400000,
