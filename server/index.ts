@@ -35,6 +35,8 @@ declare module "http" {
 
 // Allow CORS from the frontend (supports comma-separated origins)
 const allowedOrigins = (process.env.CLIENT_URL || "http://localhost:5173").split(',').map(o => o.trim());
+// Vercel injects VERCEL_URL for the current deployment (no protocol prefix)
+const vercelUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null;
 const isDevMode = process.env.NODE_ENV !== "production";
 app.use(cors({
   origin: (origin, callback) => {
@@ -43,12 +45,27 @@ app.use(cors({
       callback(null, true);
       return;
     }
-    // Allow requests with no origin (e.g., mobile apps, curl)
-    if (!origin || allowedOrigins.includes(origin)) {
+    // Allow requests with no origin (same-origin, curl, mobile apps)
+    if (!origin) {
       callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
+      return;
     }
+    // Allow explicitly configured origins
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+    // Allow the current Vercel deployment URL
+    if (vercelUrl && origin === vercelUrl) {
+      callback(null, true);
+      return;
+    }
+    // Allow any *.vercel.app preview/production URL for this project
+    if (origin.endsWith(".vercel.app")) {
+      callback(null, true);
+      return;
+    }
+    callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
 }));
@@ -87,7 +104,7 @@ if (!process.env.SESSION_SECRET && isProduction) {
 
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || "serprep-dev-secret-change-me",
+    secret: process.env.SESSION_SECRET || "ExamsValley-dev-secret-change-me",
     resave: false,
     saveUninitialized: false,
     store: sessionStore,
@@ -106,7 +123,7 @@ setupGoogleAuth();
 app.use(passport.initialize());
 app.use(passport.session());
 
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "admin@serprep.com";
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "admin@ExamsValley.com";
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
 const ADMIN_NAME = process.env.ADMIN_NAME || "System Administrator";
 
@@ -115,7 +132,7 @@ if (!process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD) {
   console.warn("⚠️  WARNING: ADMIN_EMAIL/ADMIN_PASSWORD not set. Using defaults. Set these in production!");
 }
 
-const TEACHER_EMAIL = process.env.TEACHER_EMAIL || "teacher@serprep.com";
+const TEACHER_EMAIL = process.env.TEACHER_EMAIL || "teacher@ExamsValley.com";
 const TEACHER_PASSWORD = process.env.TEACHER_PASSWORD || "teacher123";
 const TEACHER_NAME = process.env.TEACHER_NAME || "Demo Teacher";
 
