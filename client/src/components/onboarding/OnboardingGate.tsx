@@ -3,9 +3,9 @@ import { OnboardingWizard } from "./OnboardingWizard";
 import { useToast } from "@/hooks/use-toast";
 
 // Device ID management (Big Tech pattern)
-const DEVICE_ID_KEY = "serprep_device_id";
-const ONBOARDING_COMPLETED_KEY = "serprep_onboarding_completed";
-const PREFERENCES_KEY = "serprep_preferences";
+const DEVICE_ID_KEY = "ExamsValley_device_id";
+const ONBOARDING_COMPLETED_KEY = "ExamsValley_onboarding_completed";
+const PREFERENCES_KEY = "ExamsValley_preferences";
 
 function generateDeviceId(): string {
     return crypto.randomUUID();
@@ -119,7 +119,7 @@ export function OnboardingGate({ children }: OnboardingGateProps) {
             savePreferences(data);
 
             toast({
-                title: "Welcome to SERPREP! 🎉",
+                title: "Welcome to ExamsValley! 🎉",
                 description: "Your profile has been set up successfully.",
             });
 

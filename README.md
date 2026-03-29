@@ -1,8 +1,8 @@
-# SERPREP - Educational Management Platform
+# ExamsValley - Educational Management Platform
 
 ## 📚 Introduction
 
-**SERPREP** is a comprehensive educational management platform designed to streamline learning, teaching, and administration across multiple educational boards. The platform provides role-based access for students, teachers, and administrators, enabling efficient content management, assessment, and progress tracking.
+**ExamsValley** is a comprehensive educational management platform designed to streamline learning, teaching, and administration across multiple educational boards. The platform provides role-based access for students, teachers, and administrators, enabling efficient content management, assessment, and progress tracking.
 
 ### Key Features
 
@@ -49,7 +49,7 @@
 ## 📁 Project Structure
 
 ```
-serprep/
+ExamsValley/
 ├── client/                    # Frontend React application
 │   ├── src/
 │   │   ├── api/              # API client functions
@@ -712,8 +712,8 @@ List quizzes.
 
 1. **Clone the repository**
 ```bash
-git clone https://github.com/yourusername/serprep.git
-cd serprep
+git clone https://github.com/yourusername/ExamsValley.git
+cd ExamsValley
 ```
 
 2. **Install dependencies**
@@ -727,7 +727,7 @@ Create a `.env` file in the root directory:
 
 ```env
 # Database
-DATABASE_URL=postgresql://user:password@localhost:5432/serprep
+DATABASE_URL=postgresql://user:password@localhost:5432/ExamsValley
 
 # Session
 SESSION_SECRET=your-super-secret-session-key-change-this
@@ -753,7 +753,7 @@ npm run seed:admin
 ```
 
 Default admin credentials:
-- Email: `admin@serprep.com`
+- Email: `admin@ExamsValley.com`
 - Password: `admin123`
 
 5. **Start the development server**
@@ -883,8 +883,8 @@ This project is licensed under the MIT License.
 ## 📞 Support
 
 For issues and questions:
-- GitHub Issues: [Create an issue](https://github.com/yourusername/serprep/issues)
-- Email: support@serprep.com
+- GitHub Issues: [Create an issue](https://github.com/yourusername/ExamsValley/issues)
+- Email: support@ExamsValley.com
 
 ---
 

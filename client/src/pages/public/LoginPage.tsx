@@ -45,7 +45,7 @@ export function LoginPage() {
         description: "You have been logged in successfully.",
       });
 
-      const storedUser = localStorage.getItem("serprep_user");
+      const storedUser = localStorage.getItem("ExamsValley_user");
       if (storedUser) {
         const user = JSON.parse(storedUser);
         setLocation(`/${user.role}/dashboard`);

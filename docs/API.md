@@ -1,6 +1,6 @@
-# SERPREP API Reference
+# ExamsValley API Reference
 
-Complete API documentation for the SERPREP Educational Management Platform.
+Complete API documentation for the ExamsValley Educational Management Platform.
 
 ## Table of Contents
 
@@ -76,7 +76,7 @@ POST /api/auth/login
 Content-Type: application/json
 
 {
-  "email": "admin@serprep.com",
+  "email": "admin@ExamsValley.com",
   "password": "admin123"
 }
 ```
@@ -85,7 +85,7 @@ Content-Type: application/json
 ```json
 {
   "id": "622fa070-4829-4015-95a0-4fba9a1bea25",
-  "email": "admin@serprep.com",
+  "email": "admin@ExamsValley.com",
   "name": "System Administrator",
   "role": "admin",
   "avatar": null,
@@ -124,7 +124,7 @@ Cookie: connect.sid=s%3A...
 ```json
 {
   "id": "622fa070-4829-4015-95a0-4fba9a1bea25",
-  "email": "admin@serprep.com",
+  "email": "admin@ExamsValley.com",
   "name": "System Administrator",
   "role": "admin",
   "avatar": null,
@@ -395,7 +395,7 @@ Cookie: connect.sid=s%3A...
 {
   "id": "622fa070-4829-4015-95a0-4fba9a1bea25",
   "name": "System Administrator",
-  "email": "admin@serprep.com",
+  "email": "admin@ExamsValley.com",
   "role": "admin",
   "avatar": null,
   "board": null,
@@ -829,7 +829,7 @@ Real-time updates via WebSockets:
 For API support:
 - Documentation: This file
 - Issues: GitHub Issues
-- Email: api-support@serprep.com
+- Email: api-support@ExamsValley.com
 
 ---
 

@@ -527,6 +527,36 @@ export const studentRegistrations = pgTable("student_registrations", {
 }));
 
 // ===========================================
+// TUTOR REGISTRATION - Teachers applying as tutors
+// ===========================================
+export const tutorRegistrations = pgTable("tutor_registrations", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  userId: varchar("user_id", { length: 36 }).notNull().references(() => users.id, { onDelete: "cascade" }),
+
+  // Personal & Professional Information
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  phoneNumber: text("phone_number"),
+  degree: text("degree"),
+  subjects: text("subjects").array(), // Array of subjects they can teach
+  experienceYears: integer("experience_years"),
+  bio: text("bio"),
+  linkedinUrl: text("linkedin_url"),
+
+  // Application Status
+  status: contentStatusEnum("status").notNull().default("pending"),
+
+  // Metadata
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  userIdIdx: uniqueIndex("idx_tutor_registrations_user").on(table.userId),
+  statusIdx: index("idx_tutor_registrations_status").on(table.status),
+}));
+
+// ===========================================
 // ZOD SCHEMAS FOR VALIDATION
 // ===========================================
 export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
@@ -561,6 +591,17 @@ export const insertStudentRegistrationSchema = createInsertSchema(studentRegistr
   registrationCompletedAt: z.date().optional(),
 });
 
+export const insertTutorRegistrationSchema = createInsertSchema(tutorRegistrations).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  subjects: z.array(z.string()).optional(),
+  experienceYears: z.number().int().nonnegative().optional(),
+  ipAddress: z.string().optional().nullable(),
+  userAgent: z.string().optional().nullable(),
+});
+
 export const insertSystemEventSchema = createInsertSchema(systemEvents).omit({ id: true, createdAt: true });
 export const insertQualificationSchema = createInsertSchema(qualifications);
 export const insertBranchSchema = createInsertSchema(branches);
@@ -593,6 +634,8 @@ export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type StudentRegistration = typeof studentRegistrations.$inferSelect;
 export type InsertStudentRegistration = z.infer<typeof insertStudentRegistrationSchema>;
+export type TutorRegistration = typeof tutorRegistrations.$inferSelect;
+export type InsertTutorRegistration = z.infer<typeof insertTutorRegistrationSchema>;
 export type Board = typeof boards.$inferSelect;
 export type InsertBoard = z.infer<typeof insertBoardSchema>;
 export type Subject = typeof subjects.$inferSelect;

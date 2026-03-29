@@ -17,8 +17,8 @@ import {
 
 export function SystemSettingsPage() {
   const [generalSettings, setGeneralSettings] = useState({
-    siteName: "SERPREP Educational Platform",
-    supportEmail: "support@serprep.edu",
+    siteName: "ExamsValley Educational Platform",
+    supportEmail: "support@ExamsValley.edu",
   });
 
   const [notificationSettings, setNotificationSettings] = useState({

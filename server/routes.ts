@@ -12,7 +12,7 @@ import bcrypt from "bcryptjs";
 import { registerAdminRoutes } from "./admin-routes.js";
 import { registerMcqRoutes } from "./mcq-routes.js";
 import { requireAuth, requireRole } from "./middleware/rbac.js";
-import { authLimiter, apiLimiter } from "./middleware/rate-limit.js";
+import { authLimiter, apiLimiter, adminMutationLimiter } from "./middleware/rate-limit.js";
 import { uploadPdf, validatePdf, checkDuplicate, buildObjectKey, getPublicUrl, enrichFileWithUrl, deleteFile } from "./supabase-storage.js";
 
 // Configure multer for file uploads (in-memory storage)
@@ -34,7 +34,8 @@ import {
   insertUserSubjectSchema,
   insertFeedbackSchema,
   insertResourceNodeSchema,
-  insertStudentRegistrationSchema
+  insertStudentRegistrationSchema,
+  insertTutorRegistrationSchema
 } from "../shared/schema.js";
 
 export async function registerRoutes(
@@ -163,6 +164,62 @@ export async function registerRoutes(
       return res.status(201).json(created);
     } catch (error) {
       console.error("Error saving student registration:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/tutor/registration", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      const registration = await storage.getTutorRegistrationByUserId(userId);
+      return res.json(registration ?? null);
+    } catch (error) {
+      console.error("Error fetching tutor registration:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/tutor/registration", requireAuth, async (req: Request, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+
+      const parsed = insertTutorRegistrationSchema.safeParse({
+        ...req.body,
+        userId,
+      });
+
+      if (!parsed.success) {
+        return res.status(400).json({
+          error: "Validation error",
+          issues: parsed.error.issues,
+        });
+      }
+
+      const { userId: _validatedUserId, ...registrationData } = parsed.data;
+
+      const forwarded = req.headers["x-forwarded-for"];
+      const ipAddress = Array.isArray(forwarded)
+        ? forwarded[0]
+        : typeof forwarded === "string"
+          ? forwarded.split(",")[0]?.trim()
+          : req.socket.remoteAddress ?? null;
+
+      const created = await storage.upsertTutorRegistration(userId, {
+        ...registrationData,
+        ipAddress,
+        userAgent: req.headers["user-agent"] || null,
+      });
+
+      return res.status(201).json(created);
+    } catch (error) {
+      console.error("Error saving tutor registration:", error);
       return res.status(500).json({ error: "Internal server error" });
     }
   });
@@ -762,7 +819,7 @@ export async function registerRoutes(
   // ============================================================================
 
   // Upload a single PDF file
-  app.post("/api/curriculum/files/upload", apiLimiter, requireAuth, requireRole("admin"), upload.single('file'), async (req: Request, res: Response) => {
+  app.post("/api/curriculum/files/upload", adminMutationLimiter, requireAuth, requireRole("admin"), upload.single('file'), async (req: Request, res: Response) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: 'No file provided' });
@@ -797,7 +854,12 @@ export async function registerRoutes(
       // Check for duplicates
       const isDuplicate = await checkDuplicate(objectKey);
       if (isDuplicate) {
-        return res.status(409).json({ error: 'A file with this path already exists', objectKey });
+        // Return 200 instead of 409 so Uppy (and the user) considers this a success/skip.
+        return res.status(200).json({
+          status: 'success',
+          message: 'File already exists, skipping upload',
+          details: { objectKey }
+        });
       }
 
       // Upload to Supabase Storage
@@ -1694,7 +1756,7 @@ export async function registerRoutes(
   });
 
   // Create a resource node (Admin only)
-  app.post("/api/curriculum/nodes", apiLimiter, requireAuth, requireRole("admin"), async (req: Request, res: Response) => {
+  app.post("/api/curriculum/nodes", adminMutationLimiter, requireAuth, requireRole("admin"), async (req: Request, res: Response) => {
     try {
       // Use a custom schema here so we never require an `id` from the client.
       const ResourceNodeBody = z.object({
@@ -1876,7 +1938,6 @@ export async function registerRoutes(
           schoolName,
           ipAddress: Array.isArray(ipAddress) ? ipAddress[0] : ipAddress,
           userAgent,
-          updatedAt: new Date(),
         });
       } else {
         // Create new registration

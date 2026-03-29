@@ -18,7 +18,8 @@ export const pool = new pg.Pool({
     // to avoid exhausting Supabase's connection pool limit.
     max: isServerless ? 1 : 10,
     idleTimeoutMillis: isServerless ? 10000 : 30000,
-    connectionTimeoutMillis: 5000,
+    connectionTimeoutMillis: 30000, // Increased for stability
+    keepAlive: true,
     ssl: {
         rejectUnauthorized: false
     }

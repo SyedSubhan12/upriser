@@ -1,4 +1,4 @@
-# Deploying SERPREP to Vercel
+# Deploying ExamsValley to Vercel
 
 > A step-by-step guide to deploy this full-stack Express + React application on Vercel.
 
@@ -6,7 +6,7 @@
 
 ## Architecture Overview
 
-SERPREP is a **monorepo** with a unified build process:
+ExamsValley is a **monorepo** with a unified build process:
 
 | Layer | Tech | Output |
 |-------|------|--------|
@@ -56,7 +56,7 @@ Create a `vercel.json` file in the project root:
 }
 ```
 
-> **Note:** Since SERPREP uses a custom Express server (not a framework like Next.js), you should set `"framework": null` in both `vercel.json` and the Vercel dashboard.
+> **Note:** Since ExamsValley uses a custom Express server (not a framework like Next.js), you should set `"framework": null` in both `vercel.json` and the Vercel dashboard.
 
 ### 1.2 Push Schema to Database
 
@@ -86,10 +86,10 @@ Go to your Vercel project → **Settings** → **Environment Variables** and add
 
 | Variable | Description | Default (if unset) |
 |----------|-------------|--------------------|
-| `ADMIN_EMAIL` | Admin user email | `admin@serprep.com` |
+| `ADMIN_EMAIL` | Admin user email | `admin@ExamsValley.com` |
 | `ADMIN_PASSWORD` | Admin user password | `admin123` |
 | `ADMIN_NAME` | Admin display name | `System Administrator` |
-| `TEACHER_EMAIL` | Demo teacher email | `teacher@serprep.com` |
+| `TEACHER_EMAIL` | Demo teacher email | `teacher@ExamsValley.com` |
 | `TEACHER_PASSWORD` | Demo teacher password | `teacher123` |
 | `TEACHER_NAME` | Demo teacher name | `Demo Teacher` |
 
@@ -199,7 +199,7 @@ To add a custom domain:
 | Issue | Solution |
 |-------|----------|
 | `DATABASE_URL` not found | Ensure the env var is set in Vercel dashboard for all environments |
-| CORS errors | Set `CLIENT_URL` to your Vercel domain (e.g., `https://serprep.vercel.app`) |
+| CORS errors | Set `CLIENT_URL` to your Vercel domain (e.g., `https://ExamsValley.vercel.app`) |
 | Google OAuth redirect mismatch | Update `GOOGLE_CALLBACK_URL` to `https://your-domain.vercel.app/api/auth/google/callback` |
 | Session not persisting | Ensure `DATABASE_URL` is set — the app auto-uses PostgreSQL sessions |
 | Build fails | Run `npm run build` locally first to debug. Check `script/build.ts` for the build pipeline |

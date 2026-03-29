@@ -16,7 +16,7 @@ import { randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 
 // ⚠️ CHANGE THESE VALUES TO YOUR ADMIN CREDENTIALS
-const ADMIN_EMAIL = "admin@serprep.com";  // <-- Change this to your email
+const ADMIN_EMAIL = "admin@ExamsValley.com";  // <-- Change this to your email
 const ADMIN_PASSWORD = "admin123";        // <-- Change this to a secure password
 const ADMIN_NAME = "System Administrator"; // <-- Change this to your name
 

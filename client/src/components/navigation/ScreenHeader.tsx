@@ -29,10 +29,15 @@ export function ScreenHeader({
         <header className={cn("mb-6 space-y-3", className)}>
             {/* Breadcrumbs */}
             {breadcrumbs && breadcrumbs.length > 0 && (
-                <nav className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
+                <nav
+                    className={cn(
+                        "flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground",
+                        backHref && "pl-11"
+                    )}
+                >
                     {breadcrumbs.map((crumb, index) => (
                         <span key={index} className="flex items-center gap-1.5">
-                            {index > 0 && <ChevronRight className="h-3.5 w-3.5" />}
+                            {index > 0 && <ChevronRight className="h-3.5 w-3.5 translate-y-[1px]" />}
                             {crumb.href ? (
                                 <Link
                                     href={crumb.href}

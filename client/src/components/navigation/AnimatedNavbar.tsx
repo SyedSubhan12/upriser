@@ -31,6 +31,8 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from '@/context/ThemeContext';
+import { StaggeredMenu } from '@/components/StaggeredMenu';
+import { TutorRegistrationModal } from '@/components/TutorRegistrationModal';
 
 // Types for navigation
 interface NavLink {
@@ -193,6 +195,7 @@ export const AnimatedNavbar: React.FC = () => {
   const [location, setLocation] = useLocation();
   const { user, isAuthenticated, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const [isTutorModalOpen, setIsTutorModalOpen] = useState(false);
 
   // Build menu items based on auth state and role
   const getMenuItems = (): MenuItem[] => {
@@ -431,7 +434,7 @@ export const AnimatedNavbar: React.FC = () => {
             <div className="flex items-center gap-2 cursor-pointer">
               <GraduationCap className="h-7 w-7 text-primary" />
               <span className="text-xl font-bold bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent">
-                SERPREP
+                ExamsValley
               </span>
             </div>
           </Link>
@@ -528,18 +531,24 @@ export const AnimatedNavbar: React.FC = () => {
             </Button>
           </div>
 
-          {/* Mobile Menu Button */}
-          <button
-            className="md:hidden p-2 rounded-md hover:bg-accent transition-colors"
-            onClick={toggleMobileMenu}
-            aria-label="Toggle mobile menu"
-          >
-            {isMobileMenuOpen ? (
-              <X className="w-6 h-6 text-foreground" />
-            ) : (
-              <Menu className="w-6 h-6 text-foreground" />
-            )}
-          </button>
+          <div className="md:hidden flex items-center h-10">
+            <StaggeredMenu
+              items={menuItems.map(item => ({
+                label: item.label,
+                link: item.href,
+                ariaLabel: item.label,
+                onClick: item.label === "Become a Tutor" ? () => setIsTutorModalOpen(true) : undefined
+              }))}
+              position="right"
+              logoUrl={null}
+              accentColor="var(--primary)"
+              colors={['#0f172a', '#1e293b', '#334155']}
+              isFixed={true}
+              menuButtonColor="var(--foreground)"
+              openMenuButtonColor="var(--foreground)"
+              className="navbar-staggered-menu"
+            />
+          </div>
         </div>
 
         {/* Desktop Mega Dropdown */}
@@ -691,254 +700,12 @@ export const AnimatedNavbar: React.FC = () => {
         </AnimatePresence>
       </motion.nav>
 
-      {/* Mobile Menu Overlay */}
-      <AnimatePresence>
-        {isMobileMenuOpen && (
-          <motion.div
-            key="mobile-menu-overlay"
-            className="fixed inset-0 bg-background z-[100] md:hidden"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            <motion.div
-              key="mobile-menu-content"
-              className="fixed top-0 right-0 h-screen w-full bg-background flex flex-col"
-              variants={mobileMenuVariants}
-              initial="closed"
-              animate="open"
-              exit="closed"
-              transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            >
-              {/* Mobile Header */}
-              <div className="flex items-center justify-between p-4 border-b">
-                <div className="flex items-center gap-2">
-                  <GraduationCap className="h-6 w-6 text-primary" />
-                  <span className="text-lg font-bold text-foreground">SERPREP</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={toggleTheme}
-                    className="text-foreground"
-                  >
-                    {theme === "light" ? (
-                      <Moon className="h-5 w-5" />
-                    ) : (
-                      <Sun className="h-5 w-5" />
-                    )}
-                  </Button>
-                  <button
-                    className="p-2 rounded-md hover:bg-accent transition-colors"
-                    onClick={toggleMobileMenu}
-                    aria-label="Close mobile menu"
-                  >
-                    <X className="w-6 h-6 text-foreground" />
-                  </button>
-                </div>
-              </div>
+      {/* Mobile Menu Overlay - Handled by StaggeredMenu now */}
 
-              {/* Mobile User Info */}
-              {isAuthenticated && user && (
-                <div className="p-4 border-b bg-accent/50">
-                  <div className="flex items-center gap-3">
-                    <Avatar className="h-12 w-12 border-2 border-primary/20">
-                      {user?.avatar && <AvatarImage src={user.avatar} alt={user?.name} />}
-                      <AvatarFallback className="bg-primary/10 text-primary">
-                        {getInitials(user.name)}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <p className="font-semibold text-foreground">{user.name}</p>
-                      <p className="text-sm text-muted-foreground capitalize">{user.role}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Mobile Menu Items */}
-              <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-                <ul className="list-none p-0 m-0 space-y-2">
-                  {menuItems.map((item, index) => (
-                    <li key={`mobile-menu-${index}`}>
-                      {item.dropdownData ? (
-                        <div className="space-y-2">
-                          <button
-                            className="flex justify-between items-center w-full text-left font-semibold py-3 px-3 rounded-lg hover:bg-accent transition-colors text-foreground"
-                            onClick={() => toggleMobileDropdown(index)}
-                            aria-expanded={mobileActiveDropdownIndex === index}
-                          >
-                            {item.label}
-                            <motion.div
-                              animate={{ rotate: mobileActiveDropdownIndex === index ? 90 : 0 }}
-                              transition={{ duration: 0.2 }}
-                            >
-                              <ChevronRight className="w-5 h-5 text-muted-foreground" />
-                            </motion.div>
-                          </button>
-
-                          <AnimatePresence>
-                            {mobileActiveDropdownIndex === index && (
-                              <motion.div
-                                key={`mobile-dropdown-content-${index}`}
-                                initial="closed"
-                                animate="open"
-                                exit="closed"
-                                variants={mobileDropdownVariants}
-                                transition={{ duration: 0.3, ease: 'easeInOut' }}
-                                className="overflow-hidden"
-                              >
-                                <div className="pl-4 space-y-4 py-2">
-                                  {item.boardKey ? (
-                                    <div className="space-y-4 pr-2">
-                                      {isBoardLoading && activeBoardQuals.length === 0 ? (
-                                        <div className="px-3 py-2 text-sm text-muted-foreground italic">Loading qualifications...</div>
-                                      ) : (
-                                        <div className="space-y-3">
-                                          {activeBoardQuals.map((q: any) => (
-                                            <div key={q.id} className="space-y-1">
-                                              <button
-                                                className={cn(
-                                                  "w-full text-left flex justify-between items-center py-2 px-3 rounded-md transition-colors",
-                                                  activeQualId === q.id ? "bg-primary/5 text-primary" : "text-foreground/80 hover:bg-accent"
-                                                )}
-                                                onClick={() => {
-                                                  const isOpening = activeQualId !== q.id;
-                                                  setActiveQualId(isOpening ? q.id : null);
-                                                  if (isOpening) void loadSubjects(q.id);
-                                                }}
-                                              >
-                                                <span className="text-sm font-medium">{q.displayName}</span>
-                                                <ChevronRight className={cn(
-                                                  "h-4 w-4 transition-transform duration-200",
-                                                  activeQualId === q.id ? "rotate-90" : ""
-                                                )} />
-                                              </button>
-
-                                              <AnimatePresence>
-                                                {activeQualId === q.id && (
-                                                  <motion.div
-                                                    initial={{ height: 0, opacity: 0 }}
-                                                    animate={{ height: 'auto', opacity: 1 }}
-                                                    exit={{ height: 0, opacity: 0 }}
-                                                    className="overflow-hidden pl-4 pr-1"
-                                                  >
-                                                    <div className="pt-1 pb-2 space-y-1 border-l-2 border-primary/10 ml-1">
-                                                      {isSubjectsLoading && activeSubjects.length === 0 ? (
-                                                        <div className="pl-4 py-1.5 text-xs text-muted-foreground italic">Loading subjects...</div>
-                                                      ) : activeSubjects.length === 0 ? (
-                                                        <div className="pl-4 py-1.5 text-xs text-muted-foreground">No subjects found.</div>
-                                                      ) : (
-                                                        activeSubjects.map((s: any) => (
-                                                          <Link key={s.id} href={`/subject/${s.slug}`}>
-                                                            <span
-                                                              className="block pl-4 py-1.5 text-sm text-foreground/70 hover:text-primary transition-colors cursor-pointer"
-                                                              onClick={handleMobileLinkClick}
-                                                            >
-                                                              {s.subjectName}
-                                                              {s.subjectCode && <span className="ml-2 text-xs text-muted-foreground">({s.subjectCode})</span>}
-                                                            </span>
-                                                          </Link>
-                                                        ))
-                                                      )}
-                                                    </div>
-                                                  </motion.div>
-                                                )}
-                                              </AnimatePresence>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      )}
-                                      <Link href={item.href}>
-                                        <span
-                                          className="inline-flex items-center gap-2 px-3 py-2 text-sm font-semibold text-primary hover:text-primary/70 cursor-pointer"
-                                          onClick={handleMobileLinkClick}
-                                        >
-                                          View All {item.label} Resources
-                                          <ChevronRight className="h-4 w-4" />
-                                        </span>
-                                      </Link>
-                                    </div>
-                                  ) : item.dropdownData ? (
-                                    item.dropdownData.map((column, colIndex) => (
-                                      <div key={`mobile-col-${colIndex}`}>
-                                        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                                          {column.heading}
-                                        </h4>
-                                        <ul className="list-none p-0 m-0 space-y-1">
-                                          {column.links.map((link, linkIndex) => (
-                                            <li key={`mobile-link-${colIndex}-${linkIndex}`}>
-                                              <Link href={link.href}>
-                                                <span
-                                                  className="flex items-center gap-2 py-2 text-sm text-foreground/80 hover:text-primary cursor-pointer transition-colors"
-                                                  onClick={handleMobileLinkClick}
-                                                >
-                                                  {link.icon && <link.icon className="h-4 w-4 text-muted-foreground" />}
-                                                  {link.text}
-                                                </span>
-                                              </Link>
-                                            </li>
-                                          ))}
-                                        </ul>
-                                      </div>
-                                    ))
-                                  ) : null}
-                                </div>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                        </div>
-                      ) : (
-                        <Link href={item.href}>
-                          <span
-                            className={cn(
-                              "block font-semibold py-3 px-3 rounded-lg cursor-pointer transition-colors text-foreground",
-                              location === item.href || location.startsWith(item.href + '/')
-                                ? "bg-primary/10 text-primary"
-                                : "hover:bg-accent"
-                            )}
-                            onClick={handleMobileLinkClick}
-                          >
-                            {item.label}
-                          </span>
-                        </Link>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {/* Mobile Footer */}
-              <div className="p-4 border-t space-y-3 bg-background">
-                <Button variant="secondary" className="w-full" asChild>
-                  <Link href="/become-a-tutor" onClick={handleMobileLinkClick}>Tutor</Link>
-                </Button>
-                {isAuthenticated ? (
-                  <Button
-                    variant="outline"
-                    className="w-full justify-center gap-2"
-                    onClick={handleLogout}
-                  >
-                    <LogOut className="h-4 w-4" />
-                    Log out
-                  </Button>
-                ) : (
-                  <>
-                    <Button variant="outline" className="w-full" asChild>
-                      <Link href="/login" onClick={handleMobileLinkClick}>Log in</Link>
-                    </Button>
-                    <Button className="w-full" asChild>
-                      <Link href="/register" onClick={handleMobileLinkClick}>Get Started</Link>
-                    </Button>
-                  </>
-                )}
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <TutorRegistrationModal
+        isOpen={isTutorModalOpen}
+        onClose={() => setIsTutorModalOpen(false)}
+      />
     </>
   );
 };

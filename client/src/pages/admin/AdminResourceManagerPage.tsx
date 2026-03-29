@@ -12,7 +12,6 @@ import {
     Download,
     FolderPlus,
     ArrowLeft,
-    FolderSearch,
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -54,7 +53,8 @@ import {
     type ResourceNode,
     type FileAsset,
 } from "@/api/admin";
-import { CAIEBulkUploadDialog } from "@/components/admin/CAIEBulkUploadDialog";
+import { UppyFolderUploader } from "@/components/admin/UppyFolderUploader";
+
 
 // =============================================
 // Breadcrumb Component
@@ -270,9 +270,8 @@ export function AdminResourceManagerPage() {
     const [subjectSearch, setSubjectSearch] = useState("");
 
     // Bulk folder upload state
-    const folderInputRef = useRef<HTMLInputElement | null>(null);
-    const [isBulkUploading, setIsBulkUploading] = useState(false);
-    const [showCAIEUploadDialog, setShowCAIEUploadDialog] = useState(false);
+    const [showUppyUploader, setShowUppyUploader] = useState(false);
+
 
     // Dialog for creating nodes
     const [showNewNodeDialog, setShowNewNodeDialog] = useState(false);
@@ -624,135 +623,7 @@ export function AdminResourceManagerPage() {
         </div>
     );
 
-    const handleBulkFolderSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const fileList = e.target.files;
-        if (!fileList || fileList.length === 0) return;
-        if (!selectedSubjectId || !selectedResourceKey) {
-            toast({
-                title: "Select subject and category first",
-                description: "Choose a subject and resource category before uploading a folder.",
-                variant: "destructive",
-            });
-            return;
-        }
-
-        setIsBulkUploading(true);
-
-        try {
-            const files = Array.from(fileList);
-            const nodeCache = new Map<string, string>();
-
-            const baseParentId = nodeStack.length > 0 ? nodeStack[nodeStack.length - 1].id : null;
-
-            const ensureNodeForPath = async (segments: string[]): Promise<string> => {
-                let parentId = baseParentId;
-
-                for (const segment of segments) {
-                    const key = `${parentId || "root"}|${segment}`;
-                    if (nodeCache.has(key)) {
-                        parentId = nodeCache.get(key)!;
-                        continue;
-                    }
-
-                    // Try to find existing node matching this segment under current parent
-                    const existing = nodes.find(
-                        (n) =>
-                            n.title === segment &&
-                            ((parentId === null && (n.parentNodeId === null || n.parentNodeId === "node-pp-root")) ||
-                                n.parentNodeId === parentId)
-                    );
-
-                    if (existing) {
-                        nodeCache.set(key, existing.id);
-                        parentId = existing.id;
-                        continue;
-                    }
-
-                    const created = await createResourceNode({
-                        subjectId: selectedSubjectId,
-                        resourceKey: selectedResourceKey,
-                        parentNodeId: parentId,
-                        title: segment,
-                        nodeType: "folder",
-                        sortOrder: nodes.length,
-                    });
-
-                    nodeCache.set(key, created.id);
-                    parentId = created.id;
-                }
-
-                if (!parentId) {
-                    throw new Error("Failed to resolve node for folder path");
-                }
-
-                return parentId;
-            };
-
-            for (const file of files) {
-                const relativePath = (file as any).webkitRelativePath || file.name;
-                const parts = relativePath.split(/[/\\]/);
-                const folderSegments = parts.slice(0, -1).filter(Boolean);
-
-                const targetNodeId =
-                    folderSegments.length > 0 ? await ensureNodeForPath(folderSegments) : baseParentId;
-
-                if (!targetNodeId) {
-                    // If we still don't have a node, fall back to creating a single folder with file's parent name
-                    const fallbackTitle = folderSegments[folderSegments.length - 1] || "Uploaded Files";
-                    const created = await createResourceNode({
-                        subjectId: selectedSubjectId,
-                        resourceKey: selectedResourceKey,
-                        parentNodeId: baseParentId,
-                        title: fallbackTitle,
-                        nodeType: "folder",
-                        sortOrder: nodes.length,
-                    });
-                    nodeCache.set(`${baseParentId || "root"}|${fallbackTitle}`, created.id);
-                    await uploadFileAsset(
-                        (() => {
-                            const fd = new FormData();
-                            fd.append("file", file);
-                            fd.append("subjectId", selectedSubjectId);
-                            fd.append("resourceKey", selectedResourceKey);
-                            fd.append("nodeId", created.id);
-                            fd.append("title", file.name.replace(/\.pdf$/i, ""));
-                            return fd;
-                        })()
-                    );
-                    continue;
-                }
-
-                const formData = new FormData();
-                formData.append("file", file);
-                formData.append("subjectId", selectedSubjectId);
-                formData.append("resourceKey", selectedResourceKey);
-                formData.append("nodeId", targetNodeId);
-                formData.append("title", file.name.replace(/\.pdf$/i, ""));
-
-                await uploadFileAsset(formData);
-            }
-
-            queryClient.invalidateQueries({
-                queryKey: ["resource-nodes", selectedSubjectId, selectedResourceKey],
-            });
-
-            toast({
-                title: "Folder Upload Complete",
-                description: "All files have been uploaded and organized into folders.",
-            });
-        } catch (error: any) {
-            toast({
-                title: "Folder Upload Failed",
-                description: error?.message || "Something went wrong while uploading the folder.",
-                variant: "destructive",
-            });
-        } finally {
-            setIsBulkUploading(false);
-            if (folderInputRef.current) {
-                folderInputRef.current.value = "";
-            }
-        }
-    };
+    // (Bulk folder upload is now handled by UppyFolderUploader below)
 
     const renderNodeExplorer = () => (
         <div className="space-y-4">
@@ -773,48 +644,36 @@ export function AdminResourceManagerPage() {
                     </span>
                 </div>
                 <div className="flex items-center gap-2">
-                    <input
-                        ref={folderInputRef}
-                        type="file"
-                        multiple
-                        className="hidden"
-                        onChange={handleBulkFolderSelect}
-                        {...({ webkitdirectory: "true" } as any)}
-                    />
                     <Button
-                        variant="outline"
+                        variant={showUppyUploader ? "default" : "outline"}
                         size="sm"
-                        onClick={() => folderInputRef.current?.click()}
-                        disabled={isBulkUploading}
+                        onClick={() => setShowUppyUploader(!showUppyUploader)}
                     >
-                        {isBulkUploading ? (
-                            <>
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                Uploading...
-                            </>
-                        ) : (
-                            <>
-                                <Upload className="h-4 w-4 mr-2" />
-                                Upload Folder
-                            </>
-                        )}
+                        <Upload className="h-4 w-4 mr-2" />
+                        {showUppyUploader ? "Hide Uploader" : "Upload Files / Folders"}
                     </Button>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setShowCAIEUploadDialog(true)}
-                        disabled={isBulkUploading}
-                        className="border-primary/50 text-primary hover:bg-primary/5"
-                    >
-                        <FolderSearch className="h-4 w-4 mr-2" />
-                        CAIE Intelligent Upload
-                    </Button>
+
                     <Button size="sm" onClick={() => setShowNewNodeDialog(true)}>
                         <FolderPlus className="h-4 w-4 mr-2" />
                         New Folder
                     </Button>
                 </div>
             </div>
+
+            {/* Uppy Folder Uploader */}
+            {showUppyUploader && selectedSubjectId && selectedResourceKey && (
+                <div className="mb-4 rounded-lg border bg-muted/30 p-4">
+                    <UppyFolderUploader
+                        subjectId={selectedSubjectId}
+                        resourceKey={selectedResourceKey}
+                        rootNodeId={currentParentNodeId}
+                        boardKey={boards.find(b => b.id === selectedBoardId)?.boardKey}
+                        qualKey={qualifications.find((q: any) => q.id === selectedQualId)?.qualKey}
+                        subjectSlug={subjects.find((s: any) => s.id === selectedSubjectId)?.slug || subjects.find((s: any) => s.id === selectedSubjectId)?.subjectName?.toLowerCase().replace(/\s+/g, '-')}
+                        height={350}
+                    />
+                </div>
+            )}
 
             {loadingNodes ? (
                 <div className="space-y-2">
@@ -973,19 +832,7 @@ export function AdminResourceManagerPage() {
                 </DialogContent>
             </Dialog>
 
-            {/* CAIE Bulk Upload Dialog */}
-            {selectedSubjectId && selectedResourceKey && (
-                <CAIEBulkUploadDialog
-                    open={showCAIEUploadDialog}
-                    onOpenChange={setShowCAIEUploadDialog}
-                    subjectId={selectedSubjectId}
-                    resourceKey={selectedResourceKey}
-                    rootNodeId={currentParentNodeId}
-                    boardKey={boards.find(b => b.id === selectedBoardId)?.code}
-                    qualKey={qualifications.find((q: any) => q.id === selectedQualId)?.qualKey}
-                    subjectSlug={subjects.find((s: any) => s.id === selectedSubjectId)?.slug || subjects.find((s: any) => s.id === selectedSubjectId)?.subjectName?.toLowerCase().replace(/\s+/g, '-')}
-                />
-            )}
+
         </div>
     );
 }

@@ -78,14 +78,15 @@ export function GlobalSubjectsPage() {
 
     return (
         <CurriculumLayout>
-            <div className="mx-auto max-w-7xl px-4 py-8 md:px-6 md:py-12">
+            <div className="mx-auto max-w-7xl px-4 py-5 sm:py-8 md:px-6 md:py-12">
                 <ScreenHeader
                     title="Search Subjects"
                     subtitle="Find subjects across all boards and qualifications"
+                    className="mb-4 space-y-2 md:mb-6 md:space-y-3"
                 />
 
                 {/* Search and Filters */}
-                <div className="mt-6 space-y-4">
+                <div className="mt-4 space-y-4 md:mt-6">
                     <SearchBar
                         value={searchQuery}
                         onChange={setSearchQuery}

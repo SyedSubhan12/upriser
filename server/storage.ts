@@ -18,7 +18,8 @@ import {
   type StudentRegistration, type InsertStudentRegistration,
   users, boards, subjects, topics, materials, quizzes, questions, quizAttempts, assignments, submissions, announcements,
   qualifications, branches, subjectGroups, resourceCategories, resourceNodes, fileAssets,
-  userProfiles, userPreferences, userSubjects, feedback, studentRegistrations
+  userProfiles, userPreferences, userSubjects, feedback, studentRegistrations, tutorRegistrations,
+  type TutorRegistration, type InsertTutorRegistration
 } from "../shared/schema.js";
 import { db } from "./db.js";
 import { eq, and, desc, isNull, sql, count, or } from "drizzle-orm";
@@ -141,6 +142,13 @@ export interface IStorage {
   createStudentRegistration(registration: InsertStudentRegistration): Promise<StudentRegistration>;
   updateStudentRegistration(id: string, data: Partial<InsertStudentRegistration>): Promise<StudentRegistration | undefined>;
   upsertStudentRegistration(userId: string, data: Partial<InsertStudentRegistration>): Promise<StudentRegistration>;
+
+  // Tutor registration methods
+  getTutorRegistration(id: string): Promise<TutorRegistration | undefined>;
+  getTutorRegistrationByUserId(userId: string): Promise<TutorRegistration | undefined>;
+  createTutorRegistration(registration: InsertTutorRegistration): Promise<TutorRegistration>;
+  updateTutorRegistration(id: string, data: Partial<InsertTutorRegistration>): Promise<TutorRegistration | undefined>;
+  upsertTutorRegistration(userId: string, data: Partial<InsertTutorRegistration>): Promise<TutorRegistration>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -520,7 +528,7 @@ export class DatabaseStorage implements IStorage {
         or(
           isNull(resourceNodes.parentNodeId),
           eq(resourceNodes.parentNodeId, "node-pp-root")
-        )
+        ) as any
       );
     } else {
       // Fetch children of specific parent
@@ -646,6 +654,29 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createResourceNode(data: InsertResourceNode): Promise<ResourceNode> {
+    // De-duplicate: check if a node with identical key fields already exists
+    const conditions = [
+      eq(resourceNodes.subjectId, data.subjectId),
+      eq(resourceNodes.resourceKey, data.resourceKey),
+      eq(resourceNodes.title, data.title),
+    ];
+
+    if (data.parentNodeId) {
+      conditions.push(eq(resourceNodes.parentNodeId, data.parentNodeId));
+    } else {
+      conditions.push(
+        or(
+          isNull(resourceNodes.parentNodeId),
+          eq(resourceNodes.parentNodeId, "node-pp-root")
+        ) as any
+      );
+    }
+
+    const existing = await db.select().from(resourceNodes).where(and(...conditions)).limit(1);
+    if (existing.length > 0) {
+      return existing[0];
+    }
+
     const id = randomUUID();
     const [node] = await db.insert(resourceNodes).values({ ...data, id }).returning();
     return node;
@@ -795,7 +826,62 @@ export class DatabaseStorage implements IStorage {
         createdAt: new Date(),
         updatedAt: new Date(),
         registrationCompletedAt: new Date(),
-      }).returning();
+      } as any).returning();
+      return created;
+    }
+  }
+
+  // =============================================
+  // TUTOR REGISTRATION METHODS
+  // =============================================
+
+  async getTutorRegistration(id: string): Promise<TutorRegistration | undefined> {
+    const [registration] = await db.select().from(tutorRegistrations).where(eq(tutorRegistrations.id, id));
+    return registration;
+  }
+
+  async getTutorRegistrationByUserId(userId: string): Promise<TutorRegistration | undefined> {
+    const [registration] = await db.select().from(tutorRegistrations).where(eq(tutorRegistrations.userId, userId));
+    return registration;
+  }
+
+  async createTutorRegistration(registration: InsertTutorRegistration): Promise<TutorRegistration> {
+    const id = randomUUID();
+    const [created] = await db.insert(tutorRegistrations).values({
+      ...registration,
+      id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }).returning();
+    return created;
+  }
+
+  async updateTutorRegistration(id: string, data: Partial<InsertTutorRegistration>): Promise<TutorRegistration | undefined> {
+    const [updated] = await db.update(tutorRegistrations)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(tutorRegistrations.id, id))
+      .returning();
+    return updated;
+  }
+
+  async upsertTutorRegistration(userId: string, data: Partial<InsertTutorRegistration>): Promise<TutorRegistration> {
+    const existing = await this.getTutorRegistrationByUserId(userId);
+
+    if (existing) {
+      const [updated] = await db.update(tutorRegistrations)
+        .set({ ...data, updatedAt: new Date() })
+        .where(eq(tutorRegistrations.userId, userId))
+        .returning();
+      return updated;
+    } else {
+      const id = randomUUID();
+      const [created] = await db.insert(tutorRegistrations).values({
+        ...data,
+        userId,
+        id,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as any).returning();
       return created;
     }
   }

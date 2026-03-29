@@ -84,7 +84,7 @@ export function AdminLayout({ children }: AdminLayoutProps) {
             <Link href="/admin/dashboard" data-testid="link-admin-logo">
               <div className="flex items-center gap-2 px-2 py-1">
                 <GraduationCap className="h-6 w-6" />
-                <span className="text-lg font-semibold">SERPREP</span>
+                <span className="text-lg font-semibold">ExamsValley</span>
               </div>
             </Link>
           </SidebarHeader>

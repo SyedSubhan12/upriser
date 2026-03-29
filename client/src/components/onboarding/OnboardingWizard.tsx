@@ -208,7 +208,7 @@ export function OnboardingWizard({ open, onComplete, onSkip }: OnboardingWizardP
                             </div>
                         </div>
                         <div className="space-y-2">
-                            <h2 className="text-2xl font-bold">Welcome to SERPREP!</h2>
+                            <h2 className="text-2xl font-bold">Welcome to ExamsValley!</h2>
                             <p className="text-muted-foreground max-w-md">
                                 Let's personalize your learning experience. This will only take a minute.
                             </p>

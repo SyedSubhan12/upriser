@@ -170,7 +170,7 @@ export function SplashVideoScreen({ onFinish }: SplashVideoScreenProps) {
                     </div>
                     <div className="text-center">
                         <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent">
-                            SERPREP
+                            ExamsValley
                         </h1>
                         <p className="mt-2 text-slate-400 text-sm">
                             Your learning journey starts here

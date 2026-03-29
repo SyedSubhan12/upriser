@@ -24,6 +24,15 @@ export const apiLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// Generous rate limit for admin bulk operations (uploads, node creation)
+export const adminMutationLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 500, // Allow up to 500 requests per minute for bulk admin tasks
+  message: 'Too many admin requests, please try again later',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // Generous rate limit for public read endpoints
 export const publicLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
