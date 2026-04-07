@@ -28,6 +28,7 @@ import { HelpPage } from "@/pages/help/HelpPage";
 // Legacy Auth Pages (kept for backward compatibility)
 import { LoginPage } from "@/pages/public/LoginPage";
 import { RegisterPage } from "@/pages/public/RegisterPage";
+import { BecomeTutorPage } from "@/pages/public/BecomeTutorPage";
 import { BoardSelectionPage } from "@/pages/public/BoardSelectionPage";
 import { StudentLayout } from "@/layouts/StudentLayout";
 import { StudentDashboardPage } from "@/pages/student/StudentDashboardPage";
@@ -55,6 +56,7 @@ import { AssignmentsManagePage } from "@/pages/teacher/AssignmentsManagePage";
 import { AssignmentSubmissionsPage } from "@/pages/teacher/AssignmentSubmissionsPage";
 import { TeacherAnnouncementsPage } from "@/pages/teacher/TeacherAnnouncementsPage";
 import { McqManagerPage } from "@/pages/teacher/McqManagerPage";
+import { TutorRegistrationPage } from "@/pages/teacher/TutorRegistrationPage";
 import { AdminLayout } from "@/layouts/AdminLayout";
 import { AdminDashboardPage } from "@/pages/admin/AdminDashboardPage";
 import { BoardsPage } from "@/pages/admin/BoardsPage";
@@ -111,6 +113,7 @@ function TeacherRoutes() {
           <Route path="/teacher/assignments/:assignmentId/submissions" component={AssignmentSubmissionsPage} />
           <Route path="/teacher/announcements" component={TeacherAnnouncementsPage} />
           <Route path="/teacher/mcq-manager" component={McqManagerPage} />
+          <Route path="/teacher/registration" component={TutorRegistrationPage} />
           <Route component={NotFound} />
         </Switch>
       </TeacherLayout>
@@ -190,6 +193,9 @@ function Router() {
 
       {/* Help page */}
       <Route path="/help" component={HelpPage} />
+
+      {/* Become a Tutor Landing Page */}
+      <Route path="/become-a-tutor" component={BecomeTutorPage} />
 
       {/* ========================================= */}
       {/* LEGACY AUTH ROUTES (Backward Compat)     */}

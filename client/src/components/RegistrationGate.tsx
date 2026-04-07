@@ -3,6 +3,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { StudentRegistrationModal } from '@/components/StudentRegistrationModal';
+import { TutorRegistrationModal } from '@/components/TutorRegistrationModal';
 
 interface RegistrationGateProps {
   children: React.ReactNode;
@@ -10,56 +11,61 @@ interface RegistrationGateProps {
 
 export function RegistrationGate({ children }: RegistrationGateProps) {
   const [isChecking, setIsChecking] = useState(true);
-  const [showModal, setShowModal] = useState(false);
+  const [showStudentModal, setShowStudentModal] = useState(false);
+  const [showTutorModal, setShowTutorModal] = useState(false);
   const { user, isAuthenticated } = useAuth();
 
   useEffect(() => {
     const checkRegistration = async () => {
-      // Only check for authenticated students
       if (!isAuthenticated || !user) {
         setIsChecking(false);
-        setShowModal(false);
         return;
       }
 
-      // Only check registration for students
-      if (user.role !== 'student') {
-        setIsChecking(false);
-        setShowModal(false);
-        return;
-      }
-
-      console.log('[RegistrationGate] Checking registration for student:', user.id);
-
-      try {
-        const response = await fetch('/api/student/registration', { credentials: 'include' });
-        console.log('[RegistrationGate] Response status:', response.status);
-        
-        if (!response.ok) {
-          // If 404 or error, show modal (no registration exists)
-          console.log('[RegistrationGate] Response not OK, showing modal');
-          setShowModal(true);
+      // ── Student check ──────────────────────────────────────────────────────
+      if (user.role === 'student') {
+        console.log('[RegistrationGate] Checking student registration:', user.id);
+        try {
+          const response = await fetch('/api/student/registration', { credentials: 'include' });
+          if (!response.ok) {
+            setShowStudentModal(true);
+            return;
+          }
+          const data = await response.json();
+          console.log('[RegistrationGate] Student data:', data);
+          setShowStudentModal(!data);
+        } catch (error) {
+          console.error('[RegistrationGate] Error checking student registration:', error);
+          setShowStudentModal(true);
+        } finally {
           setIsChecking(false);
-          return;
         }
-        const data = await response.json();
-        console.log('[RegistrationGate] Registration data:', data);
-        if (!data) {
-          // No registration data, show modal
-          console.log('[RegistrationGate] No data, showing modal');
-          setShowModal(true);
-        } else {
-          // Registration exists, don't show modal
-          console.log('[RegistrationGate] Registration exists, hiding modal');
-          setShowModal(false);
-        }
-      } catch (error) {
-        console.error('[RegistrationGate] Error checking registration:', error);
-        // On error, show modal to be safe
-        setShowModal(true);
-      } finally {
-        setIsChecking(false);
+        return;
       }
+
+      // ── Teacher check ──────────────────────────────────────────────────────
+      if (user.role === 'teacher') {
+        console.log('[RegistrationGate] Checking tutor registration:', user.id);
+        try {
+          const response = await fetch('/api/tutor/registration', { credentials: 'include' });
+          if (!response.ok) {
+            setShowTutorModal(true);
+            return;
+          }
+          const data = await response.json();
+          console.log('[RegistrationGate] Tutor data:', data);
+          setShowTutorModal(!data);
+        } catch (error) {
+          console.error('[RegistrationGate] Error checking tutor registration:', error);
+          setShowTutorModal(true);
+        } finally {
+          setIsChecking(false);
+        }
+        return;
+      }
+
+      // ── Admin or other roles — skip registration check ────────────────────
+      setIsChecking(false);
     };
 
     checkRegistration();
@@ -83,9 +89,13 @@ export function RegistrationGate({ children }: RegistrationGateProps) {
   return (
     <>
       {children}
-      <StudentRegistrationModal 
-        isOpen={showModal} 
-        onClose={() => setShowModal(false)} 
+      <StudentRegistrationModal
+        isOpen={showStudentModal}
+        onClose={() => setShowStudentModal(false)}
+      />
+      <TutorRegistrationModal
+        isOpen={showTutorModal}
+        onClose={() => setShowTutorModal(false)}
       />
     </>
   );

@@ -13,6 +13,7 @@ import {
   LogOut,
   GraduationCap,
   Brain,
+  UserPen,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
@@ -43,6 +44,7 @@ const MENU_ITEMS = [
   { title: "Assignments", url: "/teacher/assignments", icon: ClipboardList },
   { title: "Analytics", url: "/teacher/analytics", icon: BarChart3 },
   { title: "Announcements", url: "/teacher/announcements", icon: Bell },
+  { title: "Registration", url: "/teacher/registration", icon: UserPen },
 ];
 
 interface TeacherLayoutProps {

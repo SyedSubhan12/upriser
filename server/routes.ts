@@ -308,12 +308,16 @@ export async function registerRoutes(
       // Hash password before storing
       const hashedPassword = await bcrypt.hash(password, 12);
 
-      // Create user — ALWAYS student on self-registration (prevents role escalation)
+      // Role selection with security check (only allow student or teacher on self-reg)
+      const requestedRole = req.body.role || "student";
+      const finalRole = ["student", "teacher"].includes(requestedRole) ? requestedRole : "student";
+
+      // Create user 
       const user = await storage.createUser({
         email,
         password: hashedPassword,
         name,
-        role: "student",
+        role: finalRole,
         authProvider: "local",
         isActive: true,
       });
