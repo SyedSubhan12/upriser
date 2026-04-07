@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import FloatingLines from "@/components/FloatingLines";
 import CurvedLoop from "@/components/CurvedLoop";
 import { useTheme } from "@/context/ThemeContext";
+import { FeaturesSection } from "@/components/curriculum/FeaturesSection";
 
 export function HomePage() {
     const { theme } = useTheme();
@@ -181,36 +182,8 @@ export function HomePage() {
                 </div>
             </section>
 
-            {/* Features Section - semi-transparent */}
-            <section className="bg-background/70 backdrop-blur-sm py-12 md:py-20">
-                <div className="mx-auto max-w-7xl px-4 md:px-6">
-                    <div className="text-center">
-                        <h2 className="text-2xl font-bold md:text-3xl">
-                            Everything You Need
-                        </h2>
-                        <p className="mt-2 text-muted-foreground">
-                            Comprehensive resources for every subject
-                        </p>
-                    </div>
-
-                    <div className="mt-10 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
-                        {[
-                            { icon: "📄", title: "Past Papers", desc: "Practice with real exam papers" },
-                            { icon: "📝", title: "Mark Schemes", desc: "Understand marking criteria" },
-                            { icon: "📚", title: "Study Notes", desc: "Detailed topic-wise notes" },
-                            { icon: "📊", title: "Grade Thresholds", desc: "Track grade boundaries" },
-                        ].map((feature, i) => (
-                            <div key={i} className="text-center">
-                                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-background text-3xl shadow-sm">
-                                    {feature.icon}
-                                </div>
-                                <h3 className="font-semibold">{feature.title}</h3>
-                                <p className="mt-1 text-sm text-muted-foreground">{feature.desc}</p>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            </section>
+            {/* Features Section — modern two-column layout */}
+            <FeaturesSection />
         </CurriculumLayout>
     );
 }

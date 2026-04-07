@@ -3,6 +3,27 @@
 @tailwind utilities;
 
 /* ============================================
+   ANIMATED BORDER BUTTON SUPPORT
+   @property is required to animate custom properties
+   ============================================ */
+@property --angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes border-rotate {
+  0% {
+    --angle: 0deg;
+  }
+
+  100% {
+    --angle: 360deg;
+  }
+}
+
+
+/* ============================================
    MOBILE RESPONSIVE BASE STYLES
    ============================================ */
 

@@ -105,9 +105,9 @@ export function StudentRegistrationModal({ isOpen, onClose }: StudentRegistratio
   }, [existing, isLoading, onClose]);
 
   return (
-    <Dialog open={isOpen} onOpenChange={() => { /* Prevent closing by clicking outside */ }}>
-      <DialogContent 
-        className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto [&>button]:hidden"
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent
+        className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto"
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
       >
@@ -161,10 +161,10 @@ export function StudentRegistrationModal({ isOpen, onClose }: StudentRegistratio
                     <FormItem>
                       <FormLabel>Age *</FormLabel>
                       <FormControl>
-                        <Input 
-                          type="number" 
-                          {...field} 
-                          value={field.value ?? ""} 
+                        <Input
+                          type="number"
+                          {...field}
+                          value={field.value ?? ""}
                           placeholder="Your age"
                           onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : undefined)}
                         />
