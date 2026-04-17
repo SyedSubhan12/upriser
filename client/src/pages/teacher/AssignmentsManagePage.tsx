@@ -229,7 +229,7 @@ export function AssignmentsManagePage() {
                           {assignment.title}
                         </div>
                       </TableCell>
-                      <TableCell>{subject?.name || "Unknown"}</TableCell>
+                      <TableCell>{subject?.subjectName || "Unknown"}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Calendar className="h-4 w-4 text-muted-foreground" />
@@ -360,7 +360,7 @@ export function AssignmentsManagePage() {
                         <SelectContent>
                           {mockBoards.map((board) => (
                             <SelectItem key={board.id} value={board.id}>
-                              {board.name}
+                              {board.displayName}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -389,7 +389,7 @@ export function AssignmentsManagePage() {
                         <SelectContent>
                           {filteredSubjects.map((subject) => (
                             <SelectItem key={subject.id} value={subject.id}>
-                              {subject.name}
+                              {subject.subjectName}
                             </SelectItem>
                           ))}
                         </SelectContent>

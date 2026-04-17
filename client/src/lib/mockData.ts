@@ -28,11 +28,11 @@ export const mockTopics: Topic[] = [
 ];
 
 export const mockMaterials: Material[] = [
-  { id: "mat-1", title: "2023 Mathematics Final Exam", description: "Complete past paper with solutions", type: "past_paper", boardId: "board-1", subjectId: "subject-1", topicId: "topic-1", year: 2023, difficulty: "medium", fileUrl: "/files/math-2023.pdf", videoUrl: null, uploaderId: "teacher-1", status: "approved", viewCount: 245, downloadCount: 89, createdAt: new Date() },
-  { id: "mat-2", title: "Quadratic Equations Notes", description: "Comprehensive notes on solving quadratic equations", type: "notes", boardId: "board-1", subjectId: "subject-1", topicId: "topic-3", year: null, difficulty: "medium", fileUrl: "/files/quadratic-notes.pdf", videoUrl: null, uploaderId: "teacher-1", status: "approved", viewCount: 189, downloadCount: 67, createdAt: new Date() },
-  { id: "mat-3", title: "Trigonometry Video Tutorial", description: "Step-by-step video guide to trigonometric identities", type: "video", boardId: "board-1", subjectId: "subject-1", topicId: "topic-7", year: null, difficulty: "hard", fileUrl: null, videoUrl: "https://example.com/video/trig", uploaderId: "teacher-1", status: "approved", viewCount: 412, downloadCount: 0, createdAt: new Date() },
-  { id: "mat-4", title: "Physics Practice Worksheet", description: "Practice problems on motion and forces", type: "worksheet", boardId: "board-1", subjectId: "subject-2", topicId: "topic-8", year: null, difficulty: "easy", fileUrl: "/files/physics-worksheet.pdf", videoUrl: null, uploaderId: "teacher-1", status: "approved", viewCount: 156, downloadCount: 45, createdAt: new Date() },
-  { id: "mat-5", title: "2022 Physics Mid-Term", description: "Previous year mid-term examination", type: "past_paper", boardId: "board-1", subjectId: "subject-2", topicId: null, year: 2022, difficulty: "medium", fileUrl: "/files/physics-2022.pdf", videoUrl: null, uploaderId: "teacher-1", status: "pending", viewCount: 0, downloadCount: 0, createdAt: new Date() },
+  { id: "mat-1", title: "2023 Mathematics Final Exam", description: "Complete past paper with solutions", type: "past_paper", boardId: "board-1", subjectId: "subject-1", topicId: "topic-1", year: 2023, difficulty: "medium", fileUrl: "/files/math-2023.pdf", videoUrl: null, uploaderId: "teacher-1", status: "approved", viewCount: 245, downloadCount: 89, rejectionReason: null, createdAt: new Date() },
+  { id: "mat-2", title: "Quadratic Equations Notes", description: "Comprehensive notes on solving quadratic equations", type: "notes", boardId: "board-1", subjectId: "subject-1", topicId: "topic-3", year: null, difficulty: "medium", fileUrl: "/files/quadratic-notes.pdf", videoUrl: null, uploaderId: "teacher-1", status: "approved", viewCount: 189, downloadCount: 67, rejectionReason: null, createdAt: new Date() },
+  { id: "mat-3", title: "Trigonometry Video Tutorial", description: "Step-by-step video guide to trigonometric identities", type: "video", boardId: "board-1", subjectId: "subject-1", topicId: "topic-7", year: null, difficulty: "hard", fileUrl: null, videoUrl: "https://example.com/video/trig", uploaderId: "teacher-1", status: "approved", viewCount: 412, downloadCount: 0, rejectionReason: null, createdAt: new Date() },
+  { id: "mat-4", title: "Physics Practice Worksheet", description: "Practice problems on motion and forces", type: "worksheet", boardId: "board-1", subjectId: "subject-2", topicId: "topic-8", year: null, difficulty: "easy", fileUrl: "/files/physics-worksheet.pdf", videoUrl: null, uploaderId: "teacher-1", status: "approved", viewCount: 156, downloadCount: 45, rejectionReason: null, createdAt: new Date() },
+  { id: "mat-5", title: "2022 Physics Mid-Term", description: "Previous year mid-term examination", type: "past_paper", boardId: "board-1", subjectId: "subject-2", topicId: null, year: 2022, difficulty: "medium", fileUrl: "/files/physics-2022.pdf", videoUrl: null, uploaderId: "teacher-1", status: "pending", viewCount: 0, downloadCount: 0, rejectionReason: null, createdAt: new Date() },
 ];
 
 export const mockQuizzes: Quiz[] = [
@@ -71,12 +71,19 @@ export const mockAnnouncements: Announcement[] = [
   { id: "ann-3", title: "Physics Lab Maintenance", content: "The physics lab will be closed for maintenance on Wednesday. All experiments will be rescheduled.", scope: "subject", boardId: "board-1", subjectId: "subject-2", authorId: "teacher-1", isActive: true, createdAt: new Date(Date.now() - 172800000) },
 ];
 
+const mockUserFields = {
+  username: null, bio: null, qualifications: null, experienceYears: null,
+  isEmailVerified: true, isApproved: true, updatedAt: null,
+  emailVerificationToken: null, emailVerificationExpires: null,
+  approvedBy: null, approvedAt: null, lastLoginAt: null,
+} as const;
+
 export const mockUsers: User[] = [
-  { id: "student-1", email: "student@demo.com", password: "demo123", name: "Alex Johnson", role: "student", avatar: null, boardIds: ["board-1"], subjectIds: ["subject-1", "subject-2"], isActive: true, createdAt: new Date(), googleId: null, authProvider: "local" },
-  { id: "student-2", email: "student2@demo.com", password: "demo123", name: "Emma Wilson", role: "student", avatar: null, boardIds: ["board-1"], subjectIds: ["subject-1", "subject-3"], isActive: true, createdAt: new Date(), googleId: null, authProvider: "local" },
-  { id: "teacher-1", email: "teacher@demo.com", password: "demo123", name: "Dr. Sarah Smith", role: "teacher", avatar: null, boardIds: ["board-1"], subjectIds: ["subject-1", "subject-2", "subject-3"], isActive: true, createdAt: new Date(), googleId: null, authProvider: "local" },
-  { id: "teacher-2", email: "teacher2@demo.com", password: "demo123", name: "Prof. Michael Brown", role: "teacher", avatar: null, boardIds: ["board-1"], subjectIds: ["subject-4", "subject-5"], isActive: true, createdAt: new Date(), googleId: null, authProvider: "local" },
-  { id: "admin-1", email: "admin@demo.com", password: "demo123", name: "Admin User", role: "admin", avatar: null, boardIds: null, subjectIds: null, isActive: true, createdAt: new Date(), googleId: null, authProvider: "local" },
+  { id: "student-1", email: "student@demo.com", password: "demo123", name: "Alex Johnson", role: "student", avatar: null, boardIds: ["board-1"], subjectIds: ["subject-1", "subject-2"], isActive: true, createdAt: new Date(), googleId: null, authProvider: "local", ...mockUserFields },
+  { id: "student-2", email: "student2@demo.com", password: "demo123", name: "Emma Wilson", role: "student", avatar: null, boardIds: ["board-1"], subjectIds: ["subject-1", "subject-3"], isActive: true, createdAt: new Date(), googleId: null, authProvider: "local", ...mockUserFields },
+  { id: "teacher-1", email: "teacher@demo.com", password: "demo123", name: "Dr. Sarah Smith", role: "teacher", avatar: null, boardIds: ["board-1"], subjectIds: ["subject-1", "subject-2", "subject-3"], isActive: true, createdAt: new Date(), googleId: null, authProvider: "local", ...mockUserFields },
+  { id: "teacher-2", email: "teacher2@demo.com", password: "demo123", name: "Prof. Michael Brown", role: "teacher", avatar: null, boardIds: ["board-1"], subjectIds: ["subject-4", "subject-5"], isActive: true, createdAt: new Date(), googleId: null, authProvider: "local", ...mockUserFields },
+  { id: "admin-1", email: "admin@demo.com", password: "demo123", name: "Admin User", role: "admin", avatar: null, boardIds: null, subjectIds: null, isActive: true, createdAt: new Date(), googleId: null, authProvider: "local", ...mockUserFields },
 ];
 
 export function getSubjectsByBoard(boardId: string): Subject[] {

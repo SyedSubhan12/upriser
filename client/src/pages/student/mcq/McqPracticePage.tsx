@@ -96,41 +96,87 @@ export function McqPracticePage() {
     // Fetch boards
     const { data: boards = [] } = useQuery<any[]>({
         queryKey: ["/api/curriculum/boards"],
+        queryFn: async () => {
+            const res = await fetch("/api/curriculum/boards", { credentials: "include" });
+            if (!res.ok) throw new Error("Failed to fetch boards");
+            return res.json();
+        }
     });
 
     // Fetch qualifications for selected board
     const { data: qualifications = [] } = useQuery<any[]>({
-        queryKey: ["/api/curriculum/qualifications", { boardId: boardId || undefined }],
+        queryKey: ["/api/curriculum/boards", boardId, "qualifications"],
         enabled: !!boardId,
+        queryFn: async ({ queryKey }) => {
+            const [, id] = queryKey as [string, string];
+            const res = await fetch(`/api/curriculum/boards/${id}/qualifications`, { credentials: "include" });
+            if (!res.ok) throw new Error("Failed to fetch qualifications");
+            return res.json();
+        }
     });
 
     // Fetch branches for selected qualification
     const { data: branches = [] } = useQuery<any[]>({
-        queryKey: ["/api/curriculum/branches", { qualId: qualId || undefined }],
+        queryKey: ["/api/curriculum/qualifications", qualId, "branches"],
         enabled: !!qualId,
+        queryFn: async ({ queryKey }) => {
+            const [, id] = queryKey as [string, string];
+            const res = await fetch(`/api/curriculum/qualifications/${id}/branches`, { credentials: "include" });
+            if (!res.ok) throw new Error("Failed to fetch branches");
+            return res.json();
+        }
     });
 
     // Fetch subjects
     const { data: subjects = [] } = useQuery<any[]>({
-        queryKey: ["/api/subjects", { boardId: boardId || undefined, qualId: qualId || undefined, branchId: branchId || undefined }],
+        queryKey: ["/api/subjects", boardId, qualId, branchId],
+        queryFn: async ({ queryKey }) => {
+            const [, bId, qId, brId] = queryKey as [string, string, string, string];
+            const params = new URLSearchParams();
+            if (bId) params.append("boardId", bId);
+            if (qId) params.append("qualId", qId);
+            if (brId) params.append("branchId", brId);
+            const res = await fetch(`/api/subjects?${params.toString()}`, { credentials: "include" });
+            if (!res.ok) throw new Error("Failed to fetch subjects");
+            return res.json();
+        }
     });
 
     // Fetch topics for selected subject
     const { data: topics = [] } = useQuery<any[]>({
-        queryKey: ["/api/topics", { subjectId }],
+        queryKey: ["/api/topics", subjectId],
         enabled: !!subjectId,
+        queryFn: async ({ queryKey }) => {
+            const [, sId] = queryKey as [string, string];
+            const res = await fetch(`/api/topics?subjectId=${sId}`, { credentials: "include" });
+            if (!res.ok) throw new Error("Failed to fetch topics");
+            return res.json();
+        }
     });
 
     // Fetch MCQ metadata
     const { data: meta } = useQuery<McqMeta>({
-        queryKey: ["/api/mcq/meta", { subjectId: subjectId || undefined }],
+        queryKey: ["/api/mcq/meta", subjectId],
         enabled: true,
+        queryFn: async ({ queryKey }) => {
+            const [, sId] = queryKey as [string, string];
+            const url = sId ? `/api/mcq/meta?subjectId=${sId}` : "/api/mcq/meta";
+            const res = await fetch(url, { credentials: "include" });
+            if (!res.ok) throw new Error("Failed to fetch meta");
+            return res.json();
+        }
     });
 
     // Fetch SIE recommendations
     const { data: recommendations = [] } = useQuery<Recommendation[]>({
-        queryKey: ["/api/mcq/recommendations", { subjectId }],
+        queryKey: ["/api/mcq/recommendations", subjectId],
         enabled: !!subjectId,
+        queryFn: async ({ queryKey }) => {
+            const [, sId] = queryKey as [string, string];
+            const res = await fetch(`/api/mcq/recommendations?subjectId=${sId}`, { credentials: "include" });
+            if (!res.ok) throw new Error("Failed to fetch recommendations");
+            return res.json();
+        }
     });
 
     // Start session mutation

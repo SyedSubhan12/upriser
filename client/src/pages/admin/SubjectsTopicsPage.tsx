@@ -278,7 +278,7 @@ export function SubjectsTopicsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-topics", selectedSubjectId] });
       toast({ title: "Topic updated", description: "The topic has been updated successfully." });
-      setIsModalOpen(false);
+      setIsTopicModalOpen(false);
     },
     onError: () => {
       toast({ title: "Error", description: "Failed to update topic.", variant: "destructive" });
@@ -480,7 +480,7 @@ export function SubjectsTopicsPage() {
                 <div className="flex items-center justify-between">
                   <Label className="text-sm font-medium">Manage Subjects</Label>
                   <Button
-                    size="xs"
+                    size="sm"
                     variant="outline"
                     onClick={handleOpenCreateSubject}
                     data-testid="button-add-subject"

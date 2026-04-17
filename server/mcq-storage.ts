@@ -61,6 +61,7 @@ export async function getMcqQuestions(filters: {
     variant?: number;
     qualId?: string;
     branchId?: string;
+    createdBy?: string;
     page?: number;
     limit?: number;
 }): Promise<{ questions: McqQuestion[]; total: number }> {
@@ -79,6 +80,7 @@ export async function getMcqQuestions(filters: {
     if (filters.variant) conditions.push(eq(mcqQuestions.variant, filters.variant));
     if (filters.qualId) conditions.push(eq(mcqQuestions.qualId, filters.qualId));
     if (filters.branchId) conditions.push(eq(mcqQuestions.branchId, filters.branchId));
+    if (filters.createdBy) conditions.push(eq(mcqQuestions.createdBy, filters.createdBy));
 
     const where = conditions.length > 0 ? and(...conditions) : undefined;
     const page = filters.page || 1;

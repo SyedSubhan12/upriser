@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { Plus, Pencil, BarChart2, HelpCircle } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,24 +14,41 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/context/AuthContext";
-import {
-  mockQuizzes,
-  mockSubjects,
-  mockQuizAttempts,
-  mockUsers,
-} from "@/lib/mockData";
+import type { Quiz, Subject, QuizAttempt } from "@shared/schema";
 
 export function QuizListPage() {
   const [, navigate] = useLocation();
   const { user } = useAuth();
-  const currentUser = user || mockUsers.find((u) => u.role === "teacher");
 
-  const myQuizzes = mockQuizzes.filter(
-    (q) => q.creatorId === currentUser?.id || q.creatorId === "teacher-1"
-  );
+  const { data: quizzes = [], isLoading: isLoadingQuizzes } = useQuery<Quiz[]>({
+    queryKey: ["/api/teacher/quizzes"],
+    queryFn: async () => {
+      const response = await fetch("/api/teacher/quizzes");
+      if (!response.ok) throw new Error("Failed to fetch quizzes");
+      return response.json();
+    },
+  });
+
+  const { data: subjects = [] } = useQuery<Subject[]>({
+    queryKey: ["/api/subjects"],
+    queryFn: async () => {
+      const response = await fetch("/api/subjects");
+      if (!response.ok) throw new Error("Failed to fetch subjects");
+      return response.json();
+    },
+  });
+
+  const { data: allAttempts = [] } = useQuery<QuizAttempt[]>({
+    queryKey: ["/api/quiz-attempts/all"],
+    queryFn: async () => {
+      return [];
+    },
+  });
+
+  const myQuizzes = quizzes;
 
   const getAttemptsCount = (quizId: string) => {
-    return mockQuizAttempts.filter((a) => a.quizId === quizId).length;
+    return allAttempts.filter((a) => a.quizId === quizId).length;
   };
 
   return (
@@ -65,8 +83,8 @@ export function QuizListPage() {
               </TableHeader>
               <TableBody>
                 {myQuizzes.map((quiz) => {
-                  const subject = mockSubjects.find(
-                    (s) => s.id === quiz.subjectId
+                  const subject = subjects.find(
+                    (s: Subject) => s.id === quiz.subjectId
                   );
                   const attemptsCount = getAttemptsCount(quiz.id);
                   return (
@@ -77,7 +95,7 @@ export function QuizListPage() {
                           {quiz.title}
                         </div>
                       </TableCell>
-                      <TableCell>{subject?.name || "Unknown"}</TableCell>
+                      <TableCell>{subject?.subjectName || "Unknown"}</TableCell>
                       <TableCell>
                         <Badge variant="outline">
                           {quiz.type === "practice" ? "Practice" : "Mock"}

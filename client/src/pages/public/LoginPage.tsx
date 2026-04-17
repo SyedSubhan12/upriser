@@ -11,10 +11,26 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import {
+  AUTH_EMAIL_HELP_TEXT,
+  validateAuthEmailAddress,
+} from "@shared/email-validation";
 
 const loginSchema = z.object({
-  email: z.string().email("Please enter a valid email address"),
+  email: z.string()
+    .trim()
+    .email("Please enter a valid email address")
+    .superRefine((value, ctx) => {
+      const validation = validateAuthEmailAddress(value);
+      if (!validation.isValid) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: validation.error,
+        });
+      }
+    })
+    .transform((value) => value.toLowerCase()),
   password: z.string().min(1, "Password is required"),
   rememberMe: z.boolean().default(false),
 });
@@ -26,6 +42,12 @@ export function LoginPage() {
   const { login, isLoading } = useAuth();
   const { toast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
+  const [emailCheck, setEmailCheck] = useState<{ exists: boolean; isValid: boolean; checked: boolean; loading: boolean }>({
+    exists: false,
+    isValid: false,
+    checked: false,
+    loading: false,
+  });
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
@@ -35,6 +57,31 @@ export function LoginPage() {
       rememberMe: false,
     },
   });
+
+  async function onEmailBlur(email: string) {
+    if (!email || email.trim().length === 0) return;
+
+    const validation = validateAuthEmailAddress(email);
+    if (!validation.isValid) return;
+
+    setEmailCheck((prev) => ({ ...prev, loading: true }));
+    try {
+      const response = await fetch("/api/auth/check-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: validation.normalizedEmail }),
+      });
+      const data = await response.json();
+      setEmailCheck({
+        exists: data.exists,
+        isValid: data.isValid,
+        checked: true,
+        loading: false,
+      });
+    } catch (error) {
+      setEmailCheck((prev) => ({ ...prev, loading: false }));
+    }
+  }
 
   async function onSubmit(values: LoginFormValues) {
     const result = await login(values.email, values.password);
@@ -50,6 +97,16 @@ export function LoginPage() {
         const user = JSON.parse(storedUser);
         setLocation(`/${user.role}/dashboard`);
       }
+      return;
+    }
+
+    if (result.needsEmailVerification && result.email) {
+      toast({
+        title: "Verify your teacher email",
+        description: result.error || "Enter the OTP sent to your inbox to continue.",
+      });
+      setLocation(`/verify-teacher-email?email=${encodeURIComponent(result.email)}`);
+      return;
     } else {
       toast({
         variant: "destructive",
@@ -85,13 +142,30 @@ export function LoginPage() {
                     <FormItem>
                       <FormLabel>Email</FormLabel>
                       <FormControl>
-                        <Input
-                          type="email"
-                          placeholder="Enter your email"
-                          data-testid="input-login-email"
-                          {...field}
-                        />
+                        <div className="relative">
+                          <Input
+                            type="email"
+                            placeholder="Enter your email"
+                            data-testid="input-login-email"
+                            {...field}
+                            onBlur={(e) => {
+                              field.onBlur();
+                              onEmailBlur(e.target.value);
+                            }}
+                          />
+                          {emailCheck.loading && (
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                              <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                            </div>
+                          )}
+                        </div>
                       </FormControl>
+                      {emailCheck.checked && !emailCheck.loading && !emailCheck.exists && (
+                        <p className="text-[0.8rem] font-medium text-destructive">
+                          Account not found. <Link href="/register" className="underline">Register here</Link>
+                        </p>
+                      )}
+                      <FormDescription>{AUTH_EMAIL_HELP_TEXT}</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

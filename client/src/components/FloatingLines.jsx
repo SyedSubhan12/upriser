@@ -73,7 +73,7 @@ vec3 background_color(vec2 uv) {
 
   col += mix(BLUE, BLACK, smoothstep(0.0, 1.0, abs(m)));
   col += mix(PINK, BLACK, smoothstep(0.0, 1.0, abs(m - 0.8)));
-  return col * 0.5;
+  return col;
 }
 
 vec3 getLineColor(float t, vec3 baseColor) {
@@ -98,7 +98,7 @@ vec3 getLineColor(float t, vec3 baseColor) {
     gradientColor = mix(c1, c2, f);
   }
   
-  return gradientColor * 0.5;
+  return gradientColor;
 }
 
   float wave(vec2 uv, float offset, vec2 screenUv, vec2 mouseUv, bool shouldBend) {
@@ -117,7 +117,7 @@ vec3 getLineColor(float t, vec3 baseColor) {
   }
 
   float m = uv.y - y;
-  return 0.0175 / max(abs(m) + 0.01, 1e-3) + 0.01;
+  return 0.0175 / max(abs(m) + 0.01, 1e-3);
 }
 
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {

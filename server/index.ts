@@ -158,6 +158,12 @@ export function log(message: string, source = "express") {
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
+
+  // Verbose logging for API requests
+  if (path.startsWith("/api")) {
+    log(`${req.method} ${path} [START]`);
+  }
+
   let capturedJsonResponse: Record<string, any> | undefined = undefined;
 
   const originalResJson = res.json;

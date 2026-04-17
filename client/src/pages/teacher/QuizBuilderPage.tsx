@@ -3,6 +3,7 @@ import { useParams, useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Save,
   Plus,
@@ -44,12 +45,11 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import type { Board, Subject, Topic } from "@shared/schema";
+import { useAuth } from "@/context/AuthContext";
 import {
   mockQuizzes,
   mockQuestions,
-  mockBoards,
-  mockSubjects,
-  mockTopics,
 } from "@/lib/mockData";
 
 const quizFormSchema = z.object({
@@ -91,6 +91,8 @@ export function QuizBuilderPage() {
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
   const { toast } = useToast();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
 
   const isEditing = id && id !== "new";
   const existingQuiz = isEditing ? mockQuizzes.find((q) => q.id === id) : null;
@@ -100,6 +102,15 @@ export function QuizBuilderPage() {
   const [editingQuestionIndex, setEditingQuestionIndex] = useState<number | null>(
     null
   );
+
+  const { data: boards = [] } = useQuery<Board[]>({
+    queryKey: ["/api/curriculum/boards"],
+    queryFn: async () => {
+      const response = await fetch("/api/curriculum/boards");
+      if (!response.ok) throw new Error("Failed to fetch boards");
+      return response.json();
+    },
+  });
 
   const quizForm = useForm<QuizFormValues>({
     resolver: zodResolver(quizFormSchema),
@@ -160,15 +171,35 @@ export function QuizBuilderPage() {
   const selectedSubjectId = quizForm.watch("subjectId");
   const isTimed = quizForm.watch("isTimed");
 
+  const { data: subjects = [] } = useQuery<Subject[]>({
+    queryKey: ["/api/curriculum/subjects", { boardId: selectedBoardId }],
+    queryFn: async () => {
+      const response = await fetch(`/api/subjects?boardId=${selectedBoardId}`);
+      if (!response.ok) throw new Error("Failed to fetch subjects");
+      return response.json();
+    },
+    enabled: !!selectedBoardId,
+  });
+
+  const { data: topics = [] } = useQuery<Topic[]>({
+    queryKey: ["/api/curriculum/topics", { subjectId: selectedSubjectId }],
+    queryFn: async () => {
+      const response = await fetch(`/api/curriculum/topics?subjectId=${selectedSubjectId}`);
+      if (!response.ok) throw new Error("Failed to fetch topics");
+      return response.json();
+    },
+    enabled: !!selectedSubjectId,
+  });
+
   const filteredSubjects = useMemo(() => {
     if (!selectedBoardId) return [];
-    return mockSubjects.filter((s) => s.boardId === selectedBoardId);
-  }, [selectedBoardId]);
+    return subjects;
+  }, [selectedBoardId, subjects]);
 
   const filteredTopics = useMemo(() => {
     if (!selectedSubjectId) return [];
-    return mockTopics.filter((t) => t.subjectId === selectedSubjectId);
-  }, [selectedSubjectId]);
+    return topics;
+  }, [selectedSubjectId, topics]);
 
   const openAddQuestionDialog = () => {
     setEditingQuestionIndex(null);
@@ -250,14 +281,60 @@ export function QuizBuilderPage() {
     setQuestions(newQuestions);
   };
 
-  const onSubmit = (data: QuizFormValues) => {
-    console.log("Quiz data:", data);
-    console.log("Questions:", questions);
-    toast({
-      title: isEditing ? "Quiz updated" : "Quiz created",
-      description: `"${data.title}" has been ${isEditing ? "updated" : "created"} with ${questions.length} questions.`,
-    });
-    navigate("/teacher/quizzes");
+  const onSubmit = async (data: QuizFormValues) => {
+    try {
+      const quizData = {
+        ...data,
+        topicId: data.topicId || null,
+        description: data.description || null,
+        isActive: true,
+        type: "practice", // Default type
+      };
+
+      const response = await fetch(isEditing ? `/api/quizzes/${id}` : "/api/quizzes", {
+        method: isEditing ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(quizData),
+      });
+
+      if (!response.ok) throw new Error("Failed to save quiz");
+      const savedQuiz = await response.json();
+
+      // Save questions
+      for (const question of questions) {
+        const questionData = {
+          ...question,
+          quizId: savedQuiz.id,
+        };
+        
+        const qResponse = await fetch(question.id.startsWith("new-q-") 
+          ? `/api/quizzes/${savedQuiz.id}/questions` 
+          : `/api/questions/${question.id}`, {
+          method: question.id.startsWith("new-q-") ? "POST" : "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(questionData),
+        });
+
+        if (!qResponse.ok) console.error("Failed to save question", question);
+      }
+
+      toast({
+        title: isEditing ? "Quiz updated" : "Quiz created",
+        description: `"${data.title}" has been ${isEditing ? "updated" : "created"} successfully.`,
+      });
+
+      // Invalidate queries to refresh the list
+      queryClient.invalidateQueries({ queryKey: ["/api/teacher/quizzes"] });
+      
+      navigate("/teacher/quizzes");
+    } catch (error) {
+      console.error("Error saving quiz:", error);
+      toast({
+        title: "Error",
+        description: "Failed to save quiz. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   return (
@@ -331,9 +408,9 @@ export function QuizBuilderPage() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {mockBoards.map((board) => (
+                          {boards.map((board) => (
                             <SelectItem key={board.id} value={board.id}>
-                              {board.name}
+                              {board.displayName}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -362,7 +439,7 @@ export function QuizBuilderPage() {
                         <SelectContent>
                           {filteredSubjects.map((subject) => (
                             <SelectItem key={subject.id} value={subject.id}>
-                              {subject.name}
+                              {subject.subjectName}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -402,12 +479,12 @@ export function QuizBuilderPage() {
                 />
               </div>
 
-              <div className="flex flex-wrap items-center gap-6">
+              <div className="flex flex-wrap items-center gap-6 sm:flex-nowrap">
                 <FormField
                   control={quizForm.control}
                   name="isTimed"
                   render={({ field }) => (
-                    <FormItem className="flex items-center gap-2">
+                    <FormItem className="flex items-center gap-2 space-y-0">
                       <FormControl>
                         <Switch
                           checked={field.value}
@@ -425,14 +502,14 @@ export function QuizBuilderPage() {
                     control={quizForm.control}
                     name="duration"
                     render={({ field }) => (
-                      <FormItem className="flex items-center gap-2">
+                      <FormItem className="flex items-center gap-2 space-y-0">
                         <FormLabel className="whitespace-nowrap">
                           Duration (minutes)
                         </FormLabel>
                         <FormControl>
                           <Input
                             type="number"
-                            className="w-24"
+                            className="w-20 sm:w-24"
                             {...field}
                             data-testid="input-quiz-duration"
                           />
@@ -464,25 +541,29 @@ export function QuizBuilderPage() {
                   {questions.map((question, index) => (
                     <div
                       key={question.id}
-                      className="flex items-start gap-3 rounded-md border p-3"
+                      className="flex flex-col sm:flex-row items-start gap-3 rounded-md border p-3"
                       data-testid={`question-item-${index}`}
                     >
-                      <div className="flex flex-col gap-1 text-muted-foreground">
-                        <GripVertical className="h-4 w-4" />
+                      <div className="flex items-center gap-3 w-full sm:w-auto">
+                        <div className="flex flex-col gap-1 text-muted-foreground shrink-0">
+                          <GripVertical className="h-4 w-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">
+                            {index + 1}. {question.questionText}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {question.marks} mark{question.marks !== 1 ? "s" : ""}
+                          </p>
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">
-                          {index + 1}. {question.questionText}
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {question.marks} mark{question.marks !== 1 ? "s" : ""}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-1">
+                      
+                      <div className="flex items-center gap-1 ml-auto sm:ml-0">
                         <Button
                           type="button"
                           variant="ghost"
                           size="icon"
+                          className="h-8 w-8"
                           onClick={() => handleMoveQuestion(index, "up")}
                           disabled={index === 0}
                           data-testid={`button-move-up-${index}`}
@@ -493,6 +574,7 @@ export function QuizBuilderPage() {
                           type="button"
                           variant="ghost"
                           size="icon"
+                          className="h-8 w-8"
                           onClick={() => handleMoveQuestion(index, "down")}
                           disabled={index === questions.length - 1}
                           data-testid={`button-move-down-${index}`}
@@ -502,17 +584,18 @@ export function QuizBuilderPage() {
                         <Button
                           type="button"
                           variant="ghost"
-                          size="icon"
+                          size="sm"
+                          className="h-8 px-2"
                           onClick={() => openEditQuestionDialog(index)}
                           data-testid={`button-edit-question-${index}`}
                         >
-                          <span className="sr-only">Edit</span>
                           Edit
                         </Button>
                         <Button
                           type="button"
                           variant="ghost"
                           size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
                           onClick={() => handleDeleteQuestion(index)}
                           data-testid={`button-delete-question-${index}`}
                         >
@@ -619,7 +702,7 @@ export function QuizBuilderPage() {
                       <RadioGroup
                         onValueChange={field.onChange}
                         value={field.value}
-                        className="flex gap-4"
+                        className="flex flex-wrap gap-x-6 gap-y-3"
                       >
                         {[0, 1, 2, 3].map((i) => (
                           <div key={i} className="flex items-center gap-1">

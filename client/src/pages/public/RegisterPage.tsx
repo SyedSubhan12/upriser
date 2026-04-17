@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -10,13 +10,33 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Label } from "@/components/ui/label";
+import {
+  AUTH_EMAIL_HELP_TEXT,
+  validateAuthEmailAddress,
+} from "@shared/email-validation";
 
 const registerSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
-  email: z.string().email("Please enter a valid email address"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
+  email: z.string()
+    .trim()
+    .email("Please enter a valid email address")
+    .superRefine((value, ctx) => {
+      const validation = validateAuthEmailAddress(value);
+      if (!validation.isValid) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: validation.error,
+        });
+      }
+    })
+    .transform((value) => value.toLowerCase()),
+  password: z.string()
+    .min(8, "Password must be at least 8 characters")
+    .regex(/[A-Z]/, "Password must include an uppercase letter")
+    .regex(/[a-z]/, "Password must include a lowercase letter")
+    .regex(/[0-9]/, "Password must include a number"),
   confirmPassword: z.string(),
   role: z.enum(["student", "teacher"], {
     required_error: "Please select a role",
@@ -29,9 +49,16 @@ const registerSchema = z.object({
 type RegisterFormValues = z.infer<typeof registerSchema>;
 
 export function RegisterPage() {
+  const [, setLocation] = useLocation();
   const { toast } = useToast();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [emailCheck, setEmailCheck] = useState<{ exists: boolean; isValid: boolean; checked: boolean; loading: boolean }>({
+    exists: false,
+    isValid: false,
+    checked: false,
+    loading: false,
+  });
 
   const form = useForm<RegisterFormValues>({
     resolver: zodResolver(registerSchema),
@@ -45,6 +72,31 @@ export function RegisterPage() {
   });
 
   const [isLoading, setIsLoading] = useState(false);
+
+  async function onEmailBlur(email: string) {
+    if (!email || email.trim().length === 0) return;
+
+    const validation = validateAuthEmailAddress(email);
+    if (!validation.isValid) return;
+
+    setEmailCheck((prev) => ({ ...prev, loading: true }));
+    try {
+      const response = await fetch("/api/auth/check-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: validation.normalizedEmail }),
+      });
+      const data = await response.json();
+      setEmailCheck({
+        exists: data.exists,
+        isValid: data.isValid,
+        checked: true,
+        loading: false,
+      });
+    } catch (error) {
+      setEmailCheck((prev) => ({ ...prev, loading: false }));
+    }
+  }
 
   async function onSubmit(values: RegisterFormValues) {
     setIsLoading(true);
@@ -62,16 +114,27 @@ export function RegisterPage() {
       });
 
       if (response.ok) {
-        const user = await response.json();
-        localStorage.setItem("ExamsValley_user", JSON.stringify(user));
+        const payload = await response.json();
+
+        if (payload.requiresEmailVerification && payload.role === "teacher") {
+          localStorage.removeItem("ExamsValley_user");
+          toast({
+            title: "Verify your teacher email",
+            description: payload.message || "We sent a 6-digit OTP to your email address.",
+          });
+          setLocation(`/verify-teacher-email?email=${encodeURIComponent(payload.email)}`);
+          return;
+        }
+
+        localStorage.setItem("ExamsValley_user", JSON.stringify(payload));
         toast({
           title: "Account created!",
           description: "Welcome to ExamsValley. Redirecting to your dashboard...",
         });
-        if (user?.role === "student") {
+        if (payload?.role === "student") {
           window.location.href = "/student/dashboard";
         } else {
-          window.location.href = `/${user.role}/dashboard`;
+          window.location.href = `/${payload.role}/dashboard`;
         }
       } else {
         const error = await response.json();
@@ -136,13 +199,30 @@ export function RegisterPage() {
                     <FormItem>
                       <FormLabel>Email</FormLabel>
                       <FormControl>
-                        <Input
-                          type="email"
-                          placeholder="Enter your email"
-                          data-testid="input-register-email"
-                          {...field}
-                        />
+                        <div className="relative">
+                          <Input
+                            type="email"
+                            placeholder="Enter your email"
+                            data-testid="input-register-email"
+                            {...field}
+                            onBlur={(e) => {
+                              field.onBlur();
+                              onEmailBlur(e.target.value);
+                            }}
+                          />
+                          {emailCheck.loading && (
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                              <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                            </div>
+                          )}
+                        </div>
                       </FormControl>
+                      {emailCheck.checked && !emailCheck.loading && emailCheck.exists && (
+                        <p className="text-[0.8rem] font-medium text-destructive">
+                          Email already registered. <Link href="/login" className="underline">Sign in instead</Link>
+                        </p>
+                      )}
+                      <FormDescription>{AUTH_EMAIL_HELP_TEXT}</FormDescription>
                       <FormMessage />
                     </FormItem>
                   )}

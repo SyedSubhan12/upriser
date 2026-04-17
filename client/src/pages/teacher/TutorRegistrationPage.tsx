@@ -38,6 +38,7 @@ const tutorRegistrationSchema = z.object({
         .optional()
         .or(z.literal("")),
     subjects: z.array(z.string()).default([]),
+    availableHours: z.string().optional(),
 });
 
 type TutorRegistrationFormValues = z.infer<typeof tutorRegistrationSchema>;
@@ -100,6 +101,7 @@ export function TutorRegistrationPage() {
             bio: "",
             linkedinUrl: "",
             subjects: [],
+            availableHours: "",
         },
     });
 
@@ -115,6 +117,7 @@ export function TutorRegistrationPage() {
             bio: existing.bio ?? "",
             linkedinUrl: existing.linkedinUrl ?? "",
             subjects: existing.subjects ?? [],
+            availableHours: existing.availableHours ?? "",
         });
     }, [existing, form]);
 
@@ -283,6 +286,23 @@ export function TutorRegistrationPage() {
                                                         {...field}
                                                         placeholder="https://linkedin.com/in/your-profile"
                                                         data-testid="input-tutor-linkedin"
+                                                    />
+                                                </FormControl>
+                                                <FormMessage />
+                                            </FormItem>
+                                        )}
+                                    />
+                                    <FormField
+                                        control={form.control}
+                                        name="availableHours"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Available Hours</FormLabel>
+                                                <FormControl>
+                                                    <Input
+                                                        {...field}
+                                                        placeholder="e.g. Mon-Fri 4PM-8PM"
+                                                        data-testid="input-tutor-hours"
                                                     />
                                                 </FormControl>
                                                 <FormMessage />

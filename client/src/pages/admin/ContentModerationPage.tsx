@@ -69,6 +69,7 @@ export function ContentModerationPage() {
       case "video":
         return <Video className="h-4 w-4" />;
       case "notes":
+      case "ebook":
         return <BookOpen className="h-4 w-4" />;
       case "worksheet":
         return <ClipboardList className="h-4 w-4" />;
@@ -242,18 +243,34 @@ export function ContentModerationPage() {
                   <span className="ml-2">{previewMaterial.uploaderName ?? "Unknown"}</span>
                 </div>
                 <div>
-                  <span className="text-muted-foreground">Difficulty:</span>
-                  <span className="ml-2 capitalize">{previewMaterial.difficulty || "Not specified"}</span>
+                  <span className="text-muted-foreground">Description:</span>
+                  <span className="ml-2">N/A</span>
                 </div>
               </div>
-              <div>
-                <span className="text-sm text-muted-foreground">Description:</span>
-                <p className="mt-1 text-sm">Description is not provided by admin summary API; could be loaded on demand if needed.</p>
-              </div>
-              <div className="rounded-md border p-4 bg-muted/50">
-                <p className="text-sm text-muted-foreground text-center">
-                  Content preview would be displayed here
-                </p>
+              <div className="rounded-md border bg-muted/50 overflow-hidden min-h-[400px] flex items-center justify-center">
+                {previewMaterial.type === "video" && previewMaterial.videoUrl ? (
+                  <video
+                    src={previewMaterial.videoUrl}
+                    controls
+                    className="w-full h-full max-h-[500px]"
+                  />
+                ) : previewMaterial.fileUrl ? (
+                  <iframe
+                    src={previewMaterial.fileUrl}
+                    className="w-full h-[500px] border-0"
+                    title={previewMaterial.title}
+                  />
+                ) : (
+                  <div className="text-center p-8">
+                    <FileText className="h-12 w-12 mx-auto text-muted-foreground mb-3 opacity-20" />
+                    <p className="text-sm text-muted-foreground">
+                      No preview available for this {previewMaterial.type}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      URL might be missing or invalid
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -283,7 +300,7 @@ export function ContentModerationPage() {
                 </Button>
               </>
             )}
-            {previewMaterial?.status !== "pending" && (
+            {previewMaterial?.status !== "PENDING" && (
               <Button variant="outline" onClick={() => setPreviewMaterial(null)} data-testid="button-close-preview">
                 Close
               </Button>

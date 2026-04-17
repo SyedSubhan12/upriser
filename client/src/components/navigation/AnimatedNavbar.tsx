@@ -540,7 +540,7 @@ export const AnimatedNavbar: React.FC = () => {
                 onClick: item.label === "Become a Tutor" ? () => setIsTutorModalOpen(true) : undefined
               }))}
               position="right"
-              logoUrl={null}
+              logoUrl={undefined}
               accentColor="var(--primary)"
               colors={['#0f172a', '#1e293b', '#334155']}
               isFixed={true}

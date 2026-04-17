@@ -21,6 +21,7 @@ declare global {
                 name: string;
                 role: UserRole;
                 isActive: boolean;
+                isApproved: boolean;
             };
         }
     }
@@ -76,6 +77,41 @@ export async function requireAuth(
         return res.status(500).json({
             error: "Internal server error",
             message: "An error occurred while verifying authentication"
+        });
+    }
+}
+
+/**
+ * Middleware to require account approval (for teachers)
+ * Non-teachers (students, admins) are considered approved by default
+ */
+export async function requireApproved(
+    req: Request,
+    res: Response,
+    next: NextFunction
+) {
+    try {
+        if (!req.user) {
+            return res.status(401).json({
+                error: "Not authenticated",
+                message: "Please log in to access this resource"
+            });
+        }
+
+        // Only teachers need to check for approval
+        if (req.user.role === "teacher" && !req.user.isApproved) {
+            return res.status(403).json({
+                error: "Approval pending",
+                message: "Your teacher account is pending admin approval. You have read-only access for now."
+            });
+        }
+
+        next();
+    } catch (error) {
+        console.error("Approval middleware error:", error);
+        return res.status(500).json({
+            error: "Internal server error",
+            message: "An error occurred while verifying account status"
         });
     }
 }

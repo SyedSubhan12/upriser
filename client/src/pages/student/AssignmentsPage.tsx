@@ -90,11 +90,11 @@ function AssignmentCard({ assignment, submission, subjects }: AssignmentCardProp
             <span className="text-muted-foreground">Total Marks</span>
             <span className="font-medium">{assignment.totalMarks}</span>
           </div>
-          {status === "graded" && submission?.grade !== null && (
+          {status === "graded" && submission?.grade !== null && submission?.grade !== undefined && (
             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Your Grade</span>
               <span className="font-medium text-green-600 dark:text-green-400">
-                {submission.grade}/{assignment.totalMarks}
+                {submission!.grade}/{assignment.totalMarks}
               </span>
             </div>
           )}

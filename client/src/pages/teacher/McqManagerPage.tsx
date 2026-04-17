@@ -10,8 +10,9 @@
  * - Delete with confirmation
  */
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/context/AuthContext";
 import {
     Brain, Plus, Upload, Wand2, Trash2, Edit, FileUp,
     Search, Filter, ChevronLeft, ChevronRight, Check,
@@ -82,11 +83,13 @@ export function McqManagerPage() {
     const { toast } = useToast();
     const queryClient = useQueryClient();
 
+    const { user } = useAuth();
     // Filters
     const [searchTerm, setSearchTerm] = useState("");
     const [filterSubject, setFilterSubject] = useState("");
     const [filterDifficulty, setFilterDifficulty] = useState("");
     const [filterSource, setFilterSource] = useState("");
+    const [filterMyQuestions, setFilterMyQuestions] = useState(false);
     const [page, setPage] = useState(1);
     const limit = 20;
 
@@ -132,6 +135,8 @@ export function McqManagerPage() {
     const [aiOptions, setAiOptions] = useState({
         subject: "",
         topic: "",
+        subjectId: "",
+        topicId: "",
         difficulty: "medium",
         count: "5",
         board: "",
@@ -140,17 +145,26 @@ export function McqManagerPage() {
     // Data Queries
     const { data: subjects = [] } = useQuery<any[]>({ queryKey: ["/api/subjects"] });
 
-    const queryString = new URLSearchParams({
-        ...(filterSubject && { subjectId: filterSubject }),
-        ...(filterDifficulty && { difficulty: filterDifficulty }),
-        ...(filterSource && { source: filterSource }),
-        ...(searchTerm && { search: searchTerm }),
-        page: page.toString(),
-        limit: limit.toString(),
-    }).toString();
+    const queryString = useMemo(() => {
+        const params = new URLSearchParams({
+            ...(filterSubject && { subjectId: filterSubject }),
+            ...(filterDifficulty && { difficulty: filterDifficulty }),
+            ...(filterSource && { source: filterSource }),
+            ...(searchTerm && { search: searchTerm }),
+            ...(filterMyQuestions && user?.id && { createdBy: user.id }),
+            page: page.toString(),
+            limit: limit.toString(),
+        });
+        return params.toString();
+    }, [filterSubject, filterDifficulty, filterSource, searchTerm, filterMyQuestions, user?.id, page, limit]);
 
     const { data: questionsData, isLoading } = useQuery<{ questions: McqQuestion[]; total: number }>({
         queryKey: [`/api/mcq/questions?${queryString}`],
+    });
+
+    const { data: topics = [] } = useQuery<any[]>({
+        queryKey: [`/api/topics?subjectId=${filterSubject || formData.subjectId || pdfOptions.subjectId || aiOptions.subjectId}`],
+        enabled: !!(filterSubject || formData.subjectId || pdfOptions.subjectId || aiOptions.subjectId),
     });
 
     const questions = questionsData?.questions || [];
@@ -177,7 +191,7 @@ export function McqManagerPage() {
 
     const updateMutation = useMutation({
         mutationFn: async ({ id, data }: { id: string; data: any }) => {
-            const res = await apiRequest("PUT", `/api/mcq/questions/${id}`, data);
+            const res = await apiRequest("PATCH", `/api/mcq/questions/${id}`, data);
             return res.json();
         },
         onSuccess: () => {
@@ -273,7 +287,7 @@ export function McqManagerPage() {
             const saved = [];
             for (const q of questions) {
                 const res = await apiRequest("POST", "/api/mcq/questions", {
-                    subjectId: aiOptions.subject ? undefined : undefined,
+                    subjectId: aiOptions.subjectId,
                     questionText: q.questionText,
                     options: q.options,
                     correctOptionIndex: q.correctOptionIndex,
@@ -453,7 +467,7 @@ export function McqManagerPage() {
                                 <SelectContent>
                                     <SelectItem value="">All Subjects</SelectItem>
                                     {subjects.map((s: any) => (
-                                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                                        <SelectItem key={s.id} value={s.id}>{s.subjectName}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
@@ -481,6 +495,16 @@ export function McqManagerPage() {
                                     <SelectItem value="ai_generated">AI Generated</SelectItem>
                                 </SelectContent>
                             </Select>
+                        </div>
+                        <div className="flex items-center gap-2 mb-1">
+                            <input
+                                type="checkbox"
+                                id="my-questions"
+                                checked={filterMyQuestions}
+                                onChange={(e) => { setFilterMyQuestions(e.target.checked); setPage(1); }}
+                                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                            />
+                            <Label htmlFor="my-questions" className="text-xs cursor-pointer">My Questions Only</Label>
                         </div>
                     </div>
                 </CardContent>
@@ -637,11 +661,22 @@ export function McqManagerPage() {
                         <div className="grid grid-cols-3 gap-3">
                             <div>
                                 <Label>Subject *</Label>
-                                <Select value={formData.subjectId} onValueChange={(v) => setFormData({ ...formData, subjectId: v })}>
+                                <Select value={formData.subjectId} onValueChange={(v) => setFormData({ ...formData, subjectId: v, topicId: "" })}>
                                     <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
                                     <SelectContent>
                                         {subjects.map((s: any) => (
-                                            <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                                            <SelectItem key={s.id} value={s.id}>{s.subjectName}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div>
+                                <Label>Topic</Label>
+                                <Select value={formData.topicId} onValueChange={(v) => setFormData({ ...formData, topicId: v })} disabled={!formData.subjectId}>
+                                    <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+                                    <SelectContent>
+                                        {topics.map((t: any) => (
+                                            <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
@@ -788,12 +823,12 @@ export function McqManagerPage() {
                                     <Label>Subject *</Label>
                                     <Select value={pdfOptions.subjectId} onValueChange={(v) => {
                                         const subj = subjects.find((s: any) => s.id === v);
-                                        setPdfOptions({ ...pdfOptions, subjectId: v, subject: subj?.name || "" });
+                                        setPdfOptions({ ...pdfOptions, subjectId: v, subject: subj?.subjectName || "" });
                                     }}>
                                         <SelectTrigger><SelectValue placeholder="Select subject" /></SelectTrigger>
                                         <SelectContent>
                                             {subjects.map((s: any) => (
-                                                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                                                <SelectItem key={s.id} value={s.id}>{s.subjectName}</SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>
@@ -873,8 +908,8 @@ export function McqManagerPage() {
                                                 <div
                                                     key={oi}
                                                     className={`text-xs p-1.5 rounded ${oi === q.correctOptionIndex
-                                                            ? "bg-green-500/10 text-green-700 font-medium"
-                                                            : "bg-muted"
+                                                        ? "bg-green-500/10 text-green-700 font-medium"
+                                                        : "bg-muted"
                                                         }`}
                                                 >
                                                     {opt.label}. {opt.text}
@@ -934,19 +969,40 @@ export function McqManagerPage() {
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
                                     <Label>Subject *</Label>
-                                    <Input
-                                        value={aiOptions.subject}
-                                        onChange={(e) => setAiOptions({ ...aiOptions, subject: e.target.value })}
-                                        placeholder="e.g. Biology"
-                                    />
+                                    <Select
+                                        value={aiOptions.subjectId}
+                                        onValueChange={(v) => {
+                                            const s = subjects.find((s: any) => s.id === v);
+                                            setAiOptions({ ...aiOptions, subjectId: v, subject: s?.subjectName || "" });
+                                        }}
+                                    >
+                                        <SelectTrigger><SelectValue placeholder="Select curriculum subject" /></SelectTrigger>
+                                        <SelectContent>
+                                            {subjects.map((s: any) => (
+                                                <SelectItem key={s.id} value={s.id}>{s.subjectName}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                                 <div>
                                     <Label>Topic *</Label>
-                                    <Input
-                                        value={aiOptions.topic}
-                                        onChange={(e) => setAiOptions({ ...aiOptions, topic: e.target.value })}
-                                        placeholder="e.g. Cell Division"
-                                    />
+                                    <Select
+                                        value={aiOptions.topicId}
+                                        onValueChange={(v) => {
+                                            const t = topics.find((t: any) => t.id === v);
+                                            setAiOptions({ ...aiOptions, topicId: v, topic: t?.name || "" });
+                                        }}
+                                        disabled={!aiOptions.subjectId}
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder={aiOptions.subjectId ? "Select topic" : "Select subject first"} />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {topics.map((t: any) => (
+                                                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                                 <div>
                                     <Label>Difficulty</Label>
@@ -979,14 +1035,20 @@ export function McqManagerPage() {
                                 />
                             </div>
                             <Button
-                                onClick={() => aiGenerateMutation.mutate({
-                                    subject: aiOptions.subject,
-                                    topic: aiOptions.topic,
-                                    difficulty: aiOptions.difficulty,
-                                    count: parseInt(aiOptions.count),
-                                    board: aiOptions.board || undefined,
-                                })}
-                                disabled={!aiOptions.subject || !aiOptions.topic || aiGenerateMutation.isPending}
+                                onClick={() => {
+                                    if (!aiOptions.subjectId) {
+                                        toast({ title: "Missing subject", description: "Please select a subject from the curriculum", variant: "destructive" });
+                                        return;
+                                    }
+                                    aiGenerateMutation.mutate({
+                                        subject: aiOptions.subject,
+                                        topic: aiOptions.topic,
+                                        difficulty: aiOptions.difficulty,
+                                        count: parseInt(aiOptions.count),
+                                        board: aiOptions.board || undefined,
+                                    });
+                                }}
+                                disabled={!aiOptions.subjectId || !aiOptions.topicId || aiGenerateMutation.isPending}
                                 className="w-full"
                             >
                                 {aiGenerateMutation.isPending ? (
@@ -1017,8 +1079,8 @@ export function McqManagerPage() {
                                                 <div
                                                     key={oi}
                                                     className={`text-xs p-1.5 rounded ${oi === q.correctOptionIndex
-                                                            ? "bg-green-500/10 text-green-700 font-medium"
-                                                            : "bg-muted"
+                                                        ? "bg-green-500/10 text-green-700 font-medium"
+                                                        : "bg-muted"
                                                         }`}
                                                 >
                                                     {opt.label}. {opt.text}

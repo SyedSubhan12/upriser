@@ -29,6 +29,7 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
   getUserByGoogleId(googleId: string): Promise<User | undefined>;
+  getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUser(id: string, data: Partial<InsertUser>): Promise<User | undefined>;
   getAllUsers(filters?: { role?: string; isActive?: boolean }): Promise<User[]>;
@@ -158,12 +159,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.email, email));
+    const normalizedEmail = email.trim().toLowerCase();
+    const [user] = await db
+      .select()
+      .from(users)
+      .where(sql`lower(${users.email}) = ${normalizedEmail}`);
     return user;
   }
 
   async getUserByGoogleId(googleId: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.googleId, googleId));
+    return user;
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(sql`lower(${users.username}) = lower(${username})`);
     return user;
   }
 
@@ -289,13 +299,14 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(materials);
   }
 
-  async getMaterialsByFilters(filters: { boardId?: string; subjectId?: string; topicId?: string; type?: string; status?: string }): Promise<Material[]> {
+  async getMaterialsByFilters(filters: { boardId?: string; subjectId?: string; topicId?: string; type?: string; status?: string; uploaderId?: string }): Promise<Material[]> {
     const conditions = [];
     if (filters.boardId) conditions.push(eq(materials.boardId, filters.boardId));
     if (filters.subjectId) conditions.push(eq(materials.subjectId, filters.subjectId));
     if (filters.topicId) conditions.push(eq(materials.topicId, filters.topicId));
     if (filters.type) conditions.push(eq(materials.type, filters.type));
     if (filters.status) conditions.push(eq(materials.status, filters.status));
+    if (filters.uploaderId) conditions.push(eq(materials.uploaderId, filters.uploaderId));
 
     if (conditions.length > 0) {
       return await db.select().from(materials).where(and(...conditions));
@@ -323,16 +334,19 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(quizzes);
   }
 
-  async getQuizzesByFilters(filters: { boardId?: string; subjectId?: string; topicId?: string; type?: string; isActive?: boolean }): Promise<Quiz[]> {
+  async getQuizzesByFilters(filters: { boardId?: string; subjectId?: string; topicId?: string; type?: string; isActive?: boolean; creatorId?: string }): Promise<Quiz[]> {
     const conditions = [];
     if (filters.boardId) conditions.push(eq(quizzes.boardId, filters.boardId));
     if (filters.subjectId) conditions.push(eq(quizzes.subjectId, filters.subjectId));
     if (filters.topicId) conditions.push(eq(quizzes.topicId, filters.topicId));
     if (filters.type) conditions.push(eq(quizzes.type, filters.type));
+    if (filters.creatorId) conditions.push(eq(quizzes.creatorId, filters.creatorId));
+    
     // Only filter by isActive if explicitly specified, default to true for backward compatibility
     if (filters.isActive !== undefined) {
       conditions.push(eq(quizzes.isActive, filters.isActive));
-    } else {
+    } else if (!filters.creatorId) {
+      // If we're not filtering by creator, default to showing only active quizzes
       conditions.push(eq(quizzes.isActive, true));
     }
 
@@ -888,4 +902,3 @@ export class DatabaseStorage implements IStorage {
 }
 
 export const storage = new DatabaseStorage();
-

@@ -149,11 +149,11 @@ export function TeacherAnnouncementsPage() {
   const getScopeDetails = (announcement: (typeof mockAnnouncements)[0]) => {
     if (announcement.scope === "board" && announcement.boardId) {
       const board = mockBoards.find((b) => b.id === announcement.boardId);
-      return board?.name || "Unknown Board";
+      return board?.displayName || "Unknown Board";
     }
     if (announcement.scope === "subject" && announcement.subjectId) {
       const subject = mockSubjects.find((s) => s.id === announcement.subjectId);
-      return subject?.name || "Unknown Subject";
+      return subject?.subjectName || "Unknown Subject";
     }
     return null;
   };
@@ -338,7 +338,7 @@ export function TeacherAnnouncementsPage() {
                         <SelectContent>
                           {mockBoards.map((board) => (
                             <SelectItem key={board.id} value={board.id}>
-                              {board.name}
+                              {board.displayName}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -366,7 +366,7 @@ export function TeacherAnnouncementsPage() {
                           <SelectContent>
                             {mockBoards.map((board) => (
                               <SelectItem key={board.id} value={board.id}>
-                                {board.name}
+                                {board.displayName}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -390,7 +390,7 @@ export function TeacherAnnouncementsPage() {
                           <SelectContent>
                             {filteredSubjects.map((subject) => (
                               <SelectItem key={subject.id} value={subject.id}>
-                                {subject.name}
+                                {subject.subjectName}
                               </SelectItem>
                             ))}
                           </SelectContent>

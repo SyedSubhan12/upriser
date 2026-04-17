@@ -8,10 +8,11 @@
   user-select: none;
   width: 100%;
   max-width: 100%;
-  aspect-ratio: 100 / 12;
+  aspect-ratio: 1440 / 280;
   overflow: visible;
   display: block;
-  font-size: 1rem; /* actual size comes from className on <text> */
+  font-size: 1rem;
+  /* actual size comes from className on <text> */
   fill: currentColor;
   -moz-user-select: none;
   -webkit-user-select: none;

@@ -142,6 +142,8 @@ export interface AdminMaterialSummary {
   board: string | null;
   status: "PENDING" | "APPROVED" | "REJECTED";
   createdAt: string;
+  fileUrl?: string | null;
+  videoUrl?: string | null;
 }
 
 export interface AdminMaterialListQuery {

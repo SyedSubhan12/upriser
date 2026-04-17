@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//home/syds/upriser/**)",
+      "Bash(npx *)",
+      "Bash(sed *)"
+    ]
+  },
+  "$version": 3
+}

@@ -12,9 +12,10 @@ import * as mcqStorage from "./mcq-storage.js";
 import * as mcqAI from "./services/mcq-ai.js";
 import * as mcqExtractor from "./services/mcq-extractor.js";
 import * as SIE from "./services/student-intelligence.js";
-import { requireAuth, requireRole } from "./middleware/rbac.js";
+import { requireAuth, requireRole, requireApproved } from "./middleware/rbac.js";
 import { apiLimiter } from "./middleware/rate-limit.js";
 import { storage } from "./storage.js";
+import { parseCambridgeMcq, validateMcqQuestions } from "./services/mcq-cambridge-parser.js";
 
 // Multer in-memory storage for PDF uploads (max 20MB)
 const upload = multer({
@@ -38,7 +39,7 @@ export function registerMcqRoutes(router: Router): void {
     // List questions (paginated, filterable)
     router.get("/api/mcq/questions", requireAuth, apiLimiter, async (req: Request, res: Response) => {
         try {
-            const { subjectId, topicId, boardId, difficulty, source, search, page, limit } = req.query;
+            const { subjectId, topicId, boardId, difficulty, source, search, page, limit, createdBy } = req.query;
             const result = await mcqStorage.getMcqQuestions({
                 subjectId: subjectId as string,
                 topicId: topicId as string,
@@ -47,6 +48,7 @@ export function registerMcqRoutes(router: Router): void {
                 qualId: req.query.qualId as string,
                 source: source as string,
                 search: search as string,
+                createdBy: createdBy as string,
                 page: page ? parseInt(page as string) : 1,
                 limit: limit ? parseInt(limit as string) : 20,
             });
@@ -70,7 +72,7 @@ export function registerMcqRoutes(router: Router): void {
     });
 
     // Create question (teacher+)
-    router.post("/api/mcq/questions", requireAuth, requireRole("teacher"), apiLimiter, async (req: Request, res: Response) => {
+    router.post("/api/mcq/questions", requireAuth, requireRole("teacher"), requireApproved, apiLimiter, async (req: Request, res: Response) => {
         try {
             const schema = z.object({
                 subjectId: z.string().min(1),
@@ -105,10 +107,19 @@ export function registerMcqRoutes(router: Router): void {
     });
 
     // Update question (teacher+)
-    router.patch("/api/mcq/questions/:id", requireAuth, requireRole("teacher"), async (req: Request, res: Response) => {
+    router.patch("/api/mcq/questions/:id", requireAuth, requireRole("teacher"), requireApproved, async (req: Request, res: Response) => {
         try {
+            const existing = await mcqStorage.getMcqQuestion(req.params.id);
+            if (!existing) return res.status(404).json({ error: "Question not found" });
+
+            // Check ownership - only creator or admin can update
+            const userId = (req.session as any).userId;
+            const userRole = (req.user as any)?.role;
+            if (existing.createdBy !== userId && userRole !== "admin") {
+                return res.status(403).json({ error: "Not authorized to update this question" });
+            }
+
             const question = await mcqStorage.updateMcqQuestion(req.params.id, req.body);
-            if (!question) return res.status(404).json({ error: "Question not found" });
             return res.json(question);
         } catch (err) {
             console.error("Error updating MCQ question:", err);
@@ -116,9 +127,19 @@ export function registerMcqRoutes(router: Router): void {
         }
     });
 
-    // Delete question (admin only)
-    router.delete("/api/mcq/questions/:id", requireAuth, requireRole("admin"), async (req: Request, res: Response) => {
+    // Delete question (teacher owns or admin)
+    router.delete("/api/mcq/questions/:id", requireAuth, requireRole("teacher"), requireApproved, async (req: Request, res: Response) => {
         try {
+            const existing = await mcqStorage.getMcqQuestion(req.params.id);
+            if (!existing) return res.status(404).json({ error: "Question not found" });
+
+            // Check ownership - only creator or admin can delete
+            const userId = (req.session as any).userId;
+            const userRole = (req.user as any)?.role;
+            if (existing.createdBy !== userId && userRole !== "admin") {
+                return res.status(403).json({ error: "Not authorized to delete this question" });
+            }
+
             const deleted = await mcqStorage.deleteMcqQuestion(req.params.id);
             if (!deleted) return res.status(404).json({ error: "Question not found" });
             return res.json({ success: true });
@@ -161,6 +182,184 @@ export function registerMcqRoutes(router: Router): void {
             if (err.name === "ZodError") return res.status(400).json({ error: "Validation failed", details: err.errors });
             console.error("Error bulk importing MCQ questions:", err);
             return res.status(500).json({ error: "Failed to bulk import questions" });
+        }
+    });
+
+    // Upload Cambridge format MCQs (teacher+)
+    router.post("/api/mcq/questions/cambridge-upload", requireAuth, requireRole("teacher"), requireApproved, apiLimiter, async (req: Request, res: Response) => {
+        try {
+            const schema = z.object({
+                text: z.string().min(10, "Question text is required"),
+                subjectId: z.string().min(1),
+                topicId: z.string().optional(),
+                boardId: z.string().optional(),
+                qualId: z.string().optional(),
+                year: z.number().optional(),
+                session: z.string().optional(),
+                paper: z.number().optional(),
+                variant: z.number().optional(),
+            });
+
+            const parsed = schema.parse(req.body);
+            const userId = (req.session as any).userId;
+
+            // Parse Cambridge format
+            const parsedMcq = parseCambridgeMcq(parsed.text);
+
+            // Validate
+            const validation = validateMcqQuestions(parsedMcq);
+            if (!validation.valid) {
+                return res.status(400).json({
+                    error: "Invalid MCQ format",
+                    details: validation.errors,
+                });
+            }
+
+            // Merge metadata
+            const metadataYear = parsedMcq.year || parsed.year;
+            const metadataSession = parsedMcq.session || parsed.session;
+            const metadataPaper = parsedMcq.paper || parsed.paper;
+            const metadataVariant = parsedMcq.variant || parsed.variant;
+            const metadataDifficulty = parsedMcq.difficulty || "medium";
+
+            // Convert to database format
+            const questionsToCreate = parsedMcq.questions.map((q) => {
+                const correctOptionIndex = q.options.findIndex((o) => o.label === q.correctAnswer);
+                return {
+                    subjectId: parsed.subjectId,
+                    topicId: parsed.topicId,
+                    boardId: parsed.boardId,
+                    qualId: parsed.qualId,
+                    questionText: q.questionText,
+                    options: q.options,
+                    correctOptionIndex: correctOptionIndex >= 0 ? correctOptionIndex : 0,
+                    explanation: q.explanation,
+                    difficulty: metadataDifficulty,
+                    source: "manual" as const,
+                    year: metadataYear,
+                    session: metadataSession,
+                    paper: metadataPaper,
+                    variant: metadataVariant,
+                    createdBy: userId,
+                };
+            });
+
+            const created = await mcqStorage.createMcqQuestionsBulk(questionsToCreate);
+
+            return res.status(201).json({
+                success: true,
+                imported: created.length,
+                total: parsedMcq.questions.length,
+                metadata: {
+                    subject: parsedMcq.subject,
+                    topic: parsedMcq.topic,
+                    year: metadataYear,
+                    session: metadataSession,
+                    paper: metadataPaper,
+                    variant: metadataVariant,
+                },
+                questions: created,
+            });
+        } catch (err: any) {
+            if (err.name === "ZodError") {
+                return res.status(400).json({ error: "Validation failed", details: err.errors });
+            }
+            console.error("Error uploading Cambridge format MCQs:", err);
+            return res.status(500).json({ error: "Failed to upload Cambridge format MCQs" });
+        }
+    });
+
+    // Upload Cambridge format MCQs via file (teacher+)
+    router.post("/api/mcq/questions/cambridge-upload-file", requireAuth, requireRole("teacher"), requireApproved, apiLimiter, upload.single("file"), async (req: Request, res: Response) => {
+        try {
+            if (!req.file) {
+                return res.status(400).json({ error: "No file uploaded" });
+            }
+
+            const { subjectId, topicId, boardId, qualId, year, session, paper, variant } = req.body;
+
+            if (!subjectId) {
+                return res.status(400).json({ error: "subjectId is required" });
+            }
+
+            const userId = (req.session as any).userId;
+
+            // Read file content (supports .txt, .md, .csv)
+            const fileContent = req.file.buffer.toString("utf-8");
+
+            // Prepend metadata if provided in form fields
+            let textWithMetadata = "";
+            if (boardId) textWithMetadata += `// Board: ${boardId}\n`;
+            if (qualId) textWithMetadata += `// Qualification: ${qualId}\n`;
+            if (topicId) textWithMetadata += `// Topic: ${topicId}\n`;
+            if (year) textWithMetadata += `// Year: ${year}\n`;
+            if (session) textWithMetadata += `// Session: ${session}\n`;
+            if (paper) textWithMetadata += `// Paper: ${paper}\n`;
+            if (variant) textWithMetadata += `// Variant: ${variant}\n`;
+            textWithMetadata += "\n" + fileContent;
+
+            // Parse Cambridge format
+            const parsedMcq = parseCambridgeMcq(textWithMetadata);
+
+            // Validate
+            const validation = validateMcqQuestions(parsedMcq);
+            if (!validation.valid) {
+                return res.status(400).json({
+                    error: "Invalid MCQ format",
+                    details: validation.errors,
+                });
+            }
+
+            const metadataYear = parsedMcq.year || (year ? parseInt(year) : undefined);
+            const metadataSession = parsedMcq.session || session;
+            const metadataPaper = parsedMcq.paper || (paper ? parseInt(paper) : undefined);
+            const metadataVariant = parsedMcq.variant || (variant ? parseInt(variant) : undefined);
+            const metadataDifficulty = parsedMcq.difficulty || "medium";
+
+            // Convert to database format
+            const questionsToCreate = parsedMcq.questions.map((q) => {
+                const correctOptionIndex = q.options.findIndex((o) => o.label === q.correctAnswer);
+                return {
+                    subjectId,
+                    topicId: topicId || undefined,
+                    boardId: boardId || undefined,
+                    qualId: qualId || undefined,
+                    questionText: q.questionText,
+                    options: q.options,
+                    correctOptionIndex: correctOptionIndex >= 0 ? correctOptionIndex : 0,
+                    explanation: q.explanation,
+                    difficulty: metadataDifficulty,
+                    source: "manual" as const,
+                    year: metadataYear,
+                    session: metadataSession,
+                    paper: metadataPaper,
+                    variant: metadataVariant,
+                    createdBy: userId,
+                };
+            });
+
+            const created = await mcqStorage.createMcqQuestionsBulk(questionsToCreate);
+
+            return res.status(201).json({
+                success: true,
+                imported: created.length,
+                total: parsedMcq.questions.length,
+                metadata: {
+                    subject: parsedMcq.subject,
+                    topic: parsedMcq.topic,
+                    year: metadataYear,
+                    session: metadataSession,
+                    paper: metadataPaper,
+                    variant: metadataVariant,
+                },
+                questions: created,
+            });
+        } catch (err: any) {
+            if (err.name === "ZodError") {
+                return res.status(400).json({ error: "Validation failed", details: err.errors });
+            }
+            console.error("Error uploading Cambridge format MCQ file:", err);
+            return res.status(500).json({ error: "Failed to upload Cambridge format MCQ file" });
         }
     });
 
@@ -441,7 +640,7 @@ export function registerMcqRoutes(router: Router): void {
     });
 
     // Generate new MCQ questions using AI
-    router.post("/api/mcq/ai/generate", requireAuth, requireRole("teacher"), apiLimiter, async (req: Request, res: Response) => {
+    router.post("/api/mcq/ai/generate", requireAuth, requireRole("teacher"), requireApproved, apiLimiter, async (req: Request, res: Response) => {
         try {
             if (!mcqAI.isAIConfigured()) {
                 return res.status(503).json({ error: "AI service not configured. Set GEMINI_API_KEY or OPENAI_API_KEY." });

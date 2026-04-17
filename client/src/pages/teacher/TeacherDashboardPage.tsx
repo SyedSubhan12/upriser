@@ -98,23 +98,21 @@ export function TeacherDashboardPage() {
     },
   });
 
-  const materialsData = materials.length > 0 ? materials : mockMaterials;
-  const quizzesData = quizzes.length > 0 ? quizzes : mockQuizzes;
-  const assignmentsData = assignments.length > 0 ? assignments : mockAssignments;
+  const materialsData = materials;
+  const quizzesData = quizzes;
+  const assignmentsData = assignments;
   const subjectsData = subjects.length > 0 ? subjects : mockSubjects;
 
   const myMaterials = materialsData.filter(
-    (m) => m.uploaderId === currentUser?.id || m.uploaderId === "teacher-1"
+    (m) => m.uploaderId === currentUser?.id
   );
   const myQuizzes = quizzesData.filter(
-    (q) => q.creatorId === currentUser?.id || q.creatorId === "teacher-1"
+    (q) => q.creatorId === currentUser?.id
   );
   const myAssignments = assignmentsData.filter(
-    (a) => a.creatorId === currentUser?.id || a.creatorId === "teacher-1"
+    (a) => a.creatorId === currentUser?.id
   );
-  const pendingSubmissions = mockSubmissions.filter(
-    (s) => s.status === "submitted"
-  );
+  const pendingSubmissions = []; // TODO: Implement real submissions fetching
 
   const recentMaterials = [...myMaterials]
     .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())

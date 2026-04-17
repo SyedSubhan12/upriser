@@ -1,3 +1,4 @@
+import React from "react";
 import { Switch, Route } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -23,13 +24,17 @@ import { SubjectResourceHub } from "@/pages/subject/SubjectResourceHub";
 import { ResourceListPage } from "@/pages/subject/ResourceListPage";
 import { FileBrowserPage } from "@/pages/subject/FileBrowserPage";
 import { PDFViewerPage } from "@/pages/files/PDFViewerPage";
+import { MultiViewPage } from "@/pages/files/MultiViewPage";
 import { HelpPage } from "@/pages/help/HelpPage";
 
 // Legacy Auth Pages (kept for backward compatibility)
 import { LoginPage } from "@/pages/public/LoginPage";
 import { RegisterPage } from "@/pages/public/RegisterPage";
+import { TeacherEmailVerificationPage } from "@/pages/public/TeacherEmailVerificationPage";
 import { BecomeTutorPage } from "@/pages/public/BecomeTutorPage";
 import { BoardSelectionPage } from "@/pages/public/BoardSelectionPage";
+import { TeacherProfilePage } from "@/pages/public/TeacherProfilePage";
+import { TeacherPortfolioPage } from "@/pages/public/TeacherPortfolioPage";
 import { StudentLayout } from "@/layouts/StudentLayout";
 import { StudentDashboardPage } from "@/pages/student/StudentDashboardPage";
 import { StudyMaterialsPage } from "@/pages/student/StudyMaterialsPage";
@@ -57,6 +62,7 @@ import { AssignmentSubmissionsPage } from "@/pages/teacher/AssignmentSubmissions
 import { TeacherAnnouncementsPage } from "@/pages/teacher/TeacherAnnouncementsPage";
 import { McqManagerPage } from "@/pages/teacher/McqManagerPage";
 import { TutorRegistrationPage } from "@/pages/teacher/TutorRegistrationPage";
+import { TeacherResourcesPage } from "@/pages/teacher/TeacherResourcesPage";
 import { AdminLayout } from "@/layouts/AdminLayout";
 import { AdminDashboardPage } from "@/pages/admin/AdminDashboardPage";
 import { BoardsPage } from "@/pages/admin/BoardsPage";
@@ -69,6 +75,8 @@ import { AnalyticsPage } from "@/pages/admin/AnalyticsPage";
 import { SystemSettingsPage } from "@/pages/admin/SystemSettingsPage";
 import { FeedbackPage } from "@/pages/admin/FeedbackPage";
 import { AdminResourceManagerPage } from "@/pages/admin/AdminResourceManagerPage";
+import { TeacherApprovalPage } from "@/pages/admin/TeacherApprovalPage";
+import { TeacherDetailPage } from "@/pages/admin/TeacherDetailPage";
 
 function StudentRoutes() {
   return (
@@ -96,56 +104,27 @@ function StudentRoutes() {
   );
 }
 
-function TeacherRoutes() {
+function TeacherLayoutWrapper({ children }: { children: React.ReactNode }) {
   return (
     <ProtectedRoute requiredAuth={true}>
       <TeacherLayout>
-        <Switch>
-          <Route path="/teacher/dashboard" component={TeacherDashboardPage} />
-          <Route path="/teacher/materials" component={MyMaterialsPage} />
-          <Route path="/teacher/materials/new" component={MaterialEditorPage} />
-          <Route path="/teacher/materials/:id" component={MaterialEditorPage} />
-          <Route path="/teacher/quizzes" component={QuizListPage} />
-          <Route path="/teacher/quizzes/new" component={QuizBuilderPage} />
-          <Route path="/teacher/quizzes/:id" component={QuizBuilderPage} />
-          <Route path="/teacher/quizzes/:quizId/results" component={QuizResultsPage} />
-          <Route path="/teacher/assignments" component={AssignmentsManagePage} />
-          <Route path="/teacher/assignments/:assignmentId/submissions" component={AssignmentSubmissionsPage} />
-          <Route path="/teacher/announcements" component={TeacherAnnouncementsPage} />
-          <Route path="/teacher/mcq-manager" component={McqManagerPage} />
-          <Route path="/teacher/registration" component={TutorRegistrationPage} />
-          <Route component={NotFound} />
-        </Switch>
+        {children}
       </TeacherLayout>
     </ProtectedRoute>
   );
 }
 
-function AdminRoutes() {
+function AdminLayoutWrapper({ children }: { children: React.ReactNode }) {
   return (
     <ProtectedRoute requiredAuth={true}>
       <AdminLayout>
-        <Switch>
-          <Route path="/admin/dashboard" component={AdminDashboardPage} />
-          <Route path="/admin/boards" component={BoardsPage} />
-          <Route path="/admin/boards/new" component={BoardEditorPage} />
-          <Route path="/admin/boards/:id" component={BoardEditorPage} />
-          <Route path="/admin/subjects" component={SubjectsTopicsPage} />
-          <Route path="/admin/users" component={UsersPage} />
-          <Route path="/admin/users/:id" component={UserDetailPage} />
-          <Route path="/admin/moderation" component={ContentModerationPage} />
-          <Route path="/admin/analytics" component={AnalyticsPage} />
-          <Route path="/admin/settings" component={SystemSettingsPage} />
-          <Route path="/admin/feedback" component={FeedbackPage} />
-          <Route path="/admin/resources" component={AdminResourceManagerPage} />
-          <Route component={NotFound} />
-        </Switch>
+        {children}
       </AdminLayout>
     </ProtectedRoute>
   );
 }
 
-function Router() {
+function AppRouter() {
   return (
     <Switch>
       {/* ========================================= */}
@@ -189,13 +168,21 @@ function Router() {
       <Route path="/subject/:subjectId/files" component={FileBrowserPage} />
 
       {/* PDF/File Viewer */}
-      <Route path="/view/file/:fileId" component={PDFViewerPage} />
+      <Route path="/view/file/:fileId">
+        <PDFViewerPage />
+      </Route>
+      <Route path="/view/multiview/:fileId1/:fileId2">
+        <MultiViewPage />
+      </Route>
 
       {/* Help page */}
       <Route path="/help" component={HelpPage} />
 
       {/* Become a Tutor Landing Page */}
       <Route path="/become-a-tutor" component={BecomeTutorPage} />
+
+      {/* Public teacher profile (e.g., examsvalley.com/yasir) - MUST be before generic catch-alls */}
+      <Route path="/t/:username" component={TeacherPortfolioPage} />
 
       {/* ========================================= */}
       {/* LEGACY AUTH ROUTES (Backward Compat)     */}
@@ -212,17 +199,57 @@ function Router() {
           <RegisterPage />
         </ProtectedRoute>
       </Route>
+      <Route path="/verify-teacher-email">
+        <ProtectedRoute requiredAuth={false}>
+          <TeacherEmailVerificationPage />
+        </ProtectedRoute>
+      </Route>
 
       {/* Board selection (legacy) */}
       <Route path="/boards" component={BoardSelectionPage} />
 
       {/* Protected routes - require authentication */}
-      <Route path="/student" component={StudentRoutes} />
-      <Route path="/student/:rest" component={StudentRoutes} />
-      <Route path="/student/:rest*" component={StudentRoutes} />
-      <Route path="/student/:rest*/*" component={StudentRoutes} />
-      <Route path="/teacher/:rest*" component={TeacherRoutes} />
-      <Route path="/admin/:rest*" component={AdminRoutes} />
+      {/* Student Routes */}
+      <Route path="/student/:rest*">
+        <StudentRoutes />
+      </Route>
+
+      {/* Flat Teacher Routes */}
+      <Route path="/teacher/dashboard"><TeacherLayoutWrapper><TeacherDashboardPage /></TeacherLayoutWrapper></Route>
+      <Route path="/teacher/materials/new"><TeacherLayoutWrapper><MaterialEditorPage /></TeacherLayoutWrapper></Route>
+      <Route path="/teacher/materials/:id"><TeacherLayoutWrapper><MaterialEditorPage /></TeacherLayoutWrapper></Route>
+      <Route path="/teacher/materials"><TeacherLayoutWrapper><MyMaterialsPage /></TeacherLayoutWrapper></Route>
+      <Route path="/teacher/resources"><TeacherLayoutWrapper><TeacherResourcesPage /></TeacherLayoutWrapper></Route>
+      <Route path="/teacher/quizzes/new"><TeacherLayoutWrapper><QuizBuilderPage /></TeacherLayoutWrapper></Route>
+      <Route path="/teacher/quizzes/:id"><TeacherLayoutWrapper><QuizBuilderPage /></TeacherLayoutWrapper></Route>
+      <Route path="/teacher/quizzes/:quizId/results"><TeacherLayoutWrapper><QuizResultsPage /></TeacherLayoutWrapper></Route>
+      <Route path="/teacher/quizzes"><TeacherLayoutWrapper><QuizListPage /></TeacherLayoutWrapper></Route>
+      <Route path="/teacher/assignments/:assignmentId/submissions"><TeacherLayoutWrapper><AssignmentSubmissionsPage /></TeacherLayoutWrapper></Route>
+      <Route path="/teacher/assignments"><TeacherLayoutWrapper><AssignmentsManagePage /></TeacherLayoutWrapper></Route>
+      <Route path="/teacher/announcements"><TeacherLayoutWrapper><TeacherAnnouncementsPage /></TeacherLayoutWrapper></Route>
+      <Route path="/teacher/mcq-manager"><TeacherLayoutWrapper><McqManagerPage /></TeacherLayoutWrapper></Route>
+      <Route path="/teacher/registration"><TeacherLayoutWrapper><TutorRegistrationPage /></TeacherLayoutWrapper></Route>
+
+      {/* Public teacher portfolio page — /teacher/:username (catch-all AFTER specific routes) */}
+      <Route path="/teacher/:username">
+        <TeacherPortfolioPage />
+      </Route>
+
+      {/* Flat Admin Routes */}
+      <Route path="/admin/dashboard"><AdminLayoutWrapper><AdminDashboardPage /></AdminLayoutWrapper></Route>
+      <Route path="/admin/boards/new"><AdminLayoutWrapper><BoardEditorPage /></AdminLayoutWrapper></Route>
+      <Route path="/admin/boards/:id"><AdminLayoutWrapper><BoardEditorPage /></AdminLayoutWrapper></Route>
+      <Route path="/admin/boards"><AdminLayoutWrapper><BoardsPage /></AdminLayoutWrapper></Route>
+      <Route path="/admin/subjects"><AdminLayoutWrapper><SubjectsTopicsPage /></AdminLayoutWrapper></Route>
+      <Route path="/admin/users/:id"><AdminLayoutWrapper><UserDetailPage /></AdminLayoutWrapper></Route>
+      <Route path="/admin/users"><AdminLayoutWrapper><UsersPage /></AdminLayoutWrapper></Route>
+      <Route path="/admin/teachers/:id"><AdminLayoutWrapper><TeacherDetailPage /></AdminLayoutWrapper></Route>
+      <Route path="/admin/teachers"><AdminLayoutWrapper><TeacherApprovalPage /></AdminLayoutWrapper></Route>
+      <Route path="/admin/moderation"><AdminLayoutWrapper><ContentModerationPage /></AdminLayoutWrapper></Route>
+      <Route path="/admin/analytics"><AdminLayoutWrapper><AnalyticsPage /></AdminLayoutWrapper></Route>
+      <Route path="/admin/settings"><AdminLayoutWrapper><SystemSettingsPage /></AdminLayoutWrapper></Route>
+      <Route path="/admin/feedback"><AdminLayoutWrapper><FeedbackPage /></AdminLayoutWrapper></Route>
+      <Route path="/admin/resources"><AdminLayoutWrapper><AdminResourceManagerPage /></AdminLayoutWrapper></Route>
 
       <Route component={NotFound} />
     </Switch>
@@ -239,7 +266,7 @@ function App() {
             <FeedbackPopup delayMinutes={2} />
             <OnboardingGate>
               <RegistrationGate>
-                <Router />
+                <AppRouter />
               </RegistrationGate>
             </OnboardingGate>
           </TooltipProvider>

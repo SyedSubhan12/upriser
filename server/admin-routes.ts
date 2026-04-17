@@ -325,6 +325,7 @@ export function registerAdminRoutes(app: Express) {
       const board = await storage.createBoard({
         displayName: name,
         boardKey: code,
+        fullName: name,
         description: description ?? null,
         isEnabled,
       });
@@ -472,10 +473,12 @@ export function registerAdminRoutes(app: Express) {
           title: m.title,
           type: m.type,
           uploaderName: uploader ? uploader.name : null,
-          subject: subjectRow ? subjectRow.name : null,
-          board: board ? board.name : null,
+          subject: subjectRow ? subjectRow.subjectName : null,
+          board: board ? board.displayName : null,
           status: mapMaterialStatusToApi(m.status),
           createdAt: m.createdAt,
+          fileUrl: m.fileUrl,
+          videoUrl: m.videoUrl,
         };
       });
 
@@ -526,18 +529,27 @@ export function registerAdminRoutes(app: Express) {
         return res.status(404).json({ error: "Material not found" });
       }
 
-      const updated = await storage.updateMaterial(req.params.id, { status: "rejected" });
+      const { reason } = req.body || {};
+
+      const updated = await storage.updateMaterial(req.params.id, {
+        status: "rejected",
+        rejectionReason: reason || null,
+      });
       if (!updated) {
         return res.status(500).json({ error: "Failed to update material" });
       }
 
       await createSystemEvent("CONTENT_REJECTED", `${updated.title} was rejected`, {
         materialId: updated.id,
+        reason,
       });
+
+      // TODO: Send rejection notification to teacher
 
       return res.json({
         id: updated.id,
         status: mapMaterialStatusToApi(updated.status),
+        rejectionReason: updated.rejectionReason,
       });
     },
   );
@@ -553,6 +565,7 @@ export function registerAdminRoutes(app: Express) {
 
       const totalStudents = users.filter((u) => u.role === "student" && u.isActive).length;
       const totalTeachers = users.filter((u) => u.role === "teacher" && u.isActive).length;
+      const pendingTeachers = users.filter((u) => u.role === "teacher" && !u.isApproved).length;
       const totalBoards = boards.filter((b) => b.isEnabled).length;
       const totalMaterials = materials.length;
       const pendingMaterials = materials.filter((m) => m.status === "pending").length;
@@ -563,6 +576,7 @@ export function registerAdminRoutes(app: Express) {
         stats: {
           totalStudents,
           totalTeachers,
+          pendingTeachers,
           totalBoards,
           totalMaterials,
           dailyActiveUsers: 0,
@@ -574,6 +588,239 @@ export function registerAdminRoutes(app: Express) {
           message: e.message,
           createdAt: e.createdAt,
         })),
+      });
+    },
+  );
+
+  // ============================================================================
+  // TEACHER APPROVAL WORKFLOW
+  // ============================================================================
+
+  // Get pending teacher applications
+  app.get(
+    "/api/admin/teachers/pending",
+    requireAuth,
+    requireRole("admin"),
+    async (_req: Request, res: Response) => {
+      const allUsers = await storage.getAllUsers();
+      const pendingTeachers = allUsers
+        .filter((u) => u.role === "teacher" && !u.isApproved)
+        .map((u) => ({
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          avatar: u.avatar,
+          isEmailVerified: u.isEmailVerified,
+          createdAt: u.createdAt,
+        }));
+
+      return res.json({ data: pendingTeachers, total: pendingTeachers.length });
+    },
+  );
+
+  // Approve a teacher
+  app.post(
+    "/api/admin/teachers/:id/approve",
+    requireAuth,
+    requireRole("admin"),
+    async (req: Request, res: Response) => {
+      const teacher = await storage.getUser(req.params.id);
+      if (!teacher) {
+        return res.status(404).json({ error: "Teacher not found" });
+      }
+
+      if (teacher.role !== "teacher") {
+        return res.status(400).json({ error: "User is not a teacher" });
+      }
+
+      if (teacher.isApproved) {
+        return res.status(400).json({ error: "Teacher is already approved" });
+      }
+
+      const updated = await storage.updateUser(req.params.id, {
+        isApproved: true,
+        approvedBy: req.user?.id,
+        approvedAt: new Date(),
+        isActive: true,
+        updatedAt: new Date(),
+      });
+
+      if (!updated) {
+        return res.status(500).json({ error: "Failed to approve teacher" });
+      }
+
+      await createSystemEvent("TEACHER_APPROVED", `Teacher ${updated.name} was approved`, {
+        teacherId: updated.id,
+        approvedBy: req.user?.id,
+      });
+
+      // TODO: Send approval email notification
+
+      return res.json({
+        success: true,
+        message: "Teacher approved successfully",
+        teacher: {
+          id: updated.id,
+          name: updated.name,
+          email: updated.email,
+          isApproved: updated.isApproved,
+          isActive: updated.isActive,
+        },
+      });
+    },
+  );
+
+  // Reject a teacher application
+  app.post(
+    "/api/admin/teachers/:id/reject",
+    requireAuth,
+    requireRole("admin"),
+    async (req: Request, res: Response) => {
+      const teacher = await storage.getUser(req.params.id);
+      if (!teacher) {
+        return res.status(404).json({ error: "Teacher not found" });
+      }
+
+      if (teacher.role !== "teacher") {
+        return res.status(400).json({ error: "User is not a teacher" });
+      }
+
+      const { reason } = req.body || {};
+
+      // Deactivate the teacher
+      const updated = await storage.updateUser(req.params.id, {
+        isActive: false,
+        updatedAt: new Date(),
+      });
+
+      if (!updated) {
+        return res.status(500).json({ error: "Failed to reject teacher" });
+      }
+
+      await createSystemEvent("TEACHER_REJECTED", `Teacher ${updated.name} was rejected`, {
+        teacherId: updated.id,
+        reason,
+      });
+
+      // TODO: Send rejection email notification
+
+      return res.json({
+        success: true,
+        message: "Teacher application rejected",
+      });
+    },
+  );
+
+  // Get teacher details (admin view)
+  app.get(
+    "/api/admin/teachers/:id",
+    requireAuth,
+    requireRole("admin"),
+    async (req: Request, res: Response) => {
+      const teacher = await storage.getUser(req.params.id);
+      if (!teacher) {
+        return res.status(404).json({ error: "Teacher not found" });
+      }
+
+      if (teacher.role !== "teacher") {
+        return res.status(400).json({ error: "User is not a teacher" });
+      }
+
+      const boards = await storage.getAllBoards();
+      const boardsById = new Map<string, Board>(boards.map((b) => [b.id, b]));
+
+      return res.json({
+        id: teacher.id,
+        name: teacher.name,
+        email: teacher.email,
+        avatar: teacher.avatar,
+        username: teacher.username,
+        bio: teacher.bio,
+        qualifications: teacher.qualifications,
+        experienceYears: teacher.experienceYears,
+        boardIds: teacher.boardIds,
+        subjectIds: teacher.subjectIds,
+        isEmailVerified: teacher.isEmailVerified,
+        isApproved: teacher.isApproved,
+        approvedAt: teacher.approvedAt,
+        isActive: teacher.isActive,
+        createdAt: teacher.createdAt,
+        lastLoginAt: teacher.lastLoginAt,
+        boards: (teacher.boardIds || []).map((id) => boardsById.get(id)).filter(Boolean),
+      });
+    },
+  );
+
+  // Update teacher profile (admin)
+  app.patch(
+    "/api/admin/teachers/:id",
+    requireAuth,
+    requireRole("admin"),
+    async (req: Request, res: Response) => {
+      const teacher = await storage.getUser(req.params.id);
+      if (!teacher) {
+        return res.status(404).json({ error: "Teacher not found" });
+      }
+
+      if (teacher.role !== "teacher") {
+        return res.status(400).json({ error: "User is not a teacher" });
+      }
+
+      const updateSchema = z.object({
+        name: z.string().min(1).optional(),
+        username: z.string().min(1).optional().nullable(),
+        bio: z.string().optional().nullable(),
+        qualifications: z.array(z.string()).optional().nullable(),
+        experienceYears: z.number().int().optional().nullable(),
+        boardIds: z.array(z.string()).optional().nullable(),
+        subjectIds: z.array(z.string()).optional().nullable(),
+        isApproved: z.boolean().optional(),
+        isActive: z.boolean().optional(),
+      });
+
+      const parsed = updateSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Invalid body", details: parsed.error.flatten() });
+      }
+
+      const { name, username, bio, qualifications, experienceYears, boardIds, subjectIds, isApproved, isActive } = parsed.data;
+
+      const updateData: any = {};
+      if (name !== undefined) updateData.name = name;
+      if (username !== undefined) updateData.username = username;
+      if (bio !== undefined) updateData.bio = bio;
+      if (qualifications !== undefined) updateData.qualifications = qualifications;
+      if (experienceYears !== undefined) updateData.experienceYears = experienceYears;
+      if (boardIds !== undefined) updateData.boardIds = boardIds;
+      if (subjectIds !== undefined) updateData.subjectIds = subjectIds;
+      if (isApproved !== undefined) updateData.isApproved = isApproved;
+      if (isActive !== undefined) updateData.isActive = isActive;
+      updateData.updatedAt = new Date();
+
+      const updated = await storage.updateUser(req.params.id, updateData);
+      if (!updated) {
+        return res.status(500).json({ error: "Failed to update teacher" });
+      }
+
+      await createSystemEvent("TEACHER_UPDATED", `Teacher ${updated.name} was updated`, {
+        teacherId: updated.id,
+      });
+
+      return res.json({
+        success: true,
+        teacher: {
+          id: updated.id,
+          name: updated.name,
+          email: updated.email,
+          username: updated.username,
+          bio: updated.bio,
+          qualifications: updated.qualifications,
+          experienceYears: updated.experienceYears,
+          boardIds: updated.boardIds,
+          subjectIds: updated.subjectIds,
+          isApproved: updated.isApproved,
+          isActive: updated.isActive,
+        },
       });
     },
   );

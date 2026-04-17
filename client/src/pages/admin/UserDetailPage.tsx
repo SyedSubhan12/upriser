@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useLocation, useRoute } from "wouter";
+import { useLocation, useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Mail, Calendar, Power } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
@@ -29,8 +29,7 @@ import {
 
 export function UserDetailPage() {
   const [, navigate] = useLocation();
-  const [, params] = useRoute("/admin/users/:id");
-  const userId = params?.id;
+  const { id: userId } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const { toast } = useToast();
 

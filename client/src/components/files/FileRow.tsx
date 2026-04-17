@@ -1,4 +1,4 @@
-import { FileText, Download, ExternalLink, Eye } from "lucide-react";
+import { FileText, Download, ExternalLink, Eye, Columns } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { FileTypeBadge } from "./FileTypeFilterBar";
@@ -10,9 +10,10 @@ interface FileRowProps {
     onView?: (file: FileAsset) => void;
     onDownload?: (file: FileAsset) => void;
     className?: string;
+    relatedFileId?: string | null;
 }
 
-export function FileRow({ file, onView, onDownload, className }: FileRowProps) {
+export function FileRow({ file, onView, onDownload, className, relatedFileId }: FileRowProps) {
     const viewHref = `/view/file/${file.id}`;
 
     const handleView = () => {
@@ -68,12 +69,28 @@ export function FileRow({ file, onView, onDownload, className }: FileRowProps) {
                     <Button
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                        className={cn(
+                            "h-8 w-8 transition-opacity",
+                            !relatedFileId && "opacity-0 group-hover:opacity-100"
+                        )}
                         title="View"
                     >
                         <Eye className="h-4 w-4" />
                     </Button>
                 </Link>
+                {relatedFileId && (
+                    <Link href={`/view/multiview/${file.id}/${relatedFileId}`}>
+                        <Button
+                            variant="default"
+                            size="sm"
+                            className="h-8 gap-1.5 px-3 shadow-sm bg-blue-600 hover:bg-blue-700"
+                            title="Open in Multi-view (side-by-side)"
+                        >
+                            <Columns className="h-3.5 w-3.5" />
+                            <span className="text-xs font-bold">Multi-view</span>
+                        </Button>
+                    </Link>
+                )}
                 <Button
                     variant="ghost"
                     size="icon"

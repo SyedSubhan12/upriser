@@ -1,14 +1,14 @@
-import { useParams, useLocation, useRoute } from "wouter";
+import { useParams, useLocation } from "wouter";
 import { useState } from "react";
-import { Download, X, Maximize, Sun, Moon } from "lucide-react";
+import { Download, X, Maximize, Sun, Moon, Split, Search, Columns } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import type { FileAsset } from "@/lib/curriculumData";
+import { Badge } from "@/components/ui/badge";
 
 export function PDFViewerPage() {
-  const [, params] = useRoute("/view/file/:fileId");
-  const fileId = params?.fileId;
+  const { fileId } = useParams<{ fileId: string }>();
   const [, navigate] = useLocation();
   const [isDark, setIsDark] = useState(false);
 
@@ -17,6 +17,9 @@ export function PDFViewerPage() {
     queryKey: [`/api/curriculum/files/${fileId}`],
     enabled: !!fileId,
   });
+
+  // Find a "matching" related file (e.g. MS for a QP)
+  // We don't need this logic here anymore as it moves to MultiViewPage
 
   const handleDownload = () => {
     if (file?.url) {
@@ -90,6 +93,19 @@ export function PDFViewerPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Multi-view Selector */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => navigate(`/view/multiview/${fileId}/select`)}
+            className="gap-2 border-primary/20 hover:border-primary/50 bg-primary/5"
+          >
+            <Columns className="h-4 w-4" />
+            <span className="hidden md:inline">Split View</span>
+          </Button>
+
+          <div className="h-6 w-px bg-border mx-1" />
+
           <Button
             variant="ghost"
             size="icon"

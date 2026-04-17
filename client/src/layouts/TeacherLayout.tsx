@@ -14,6 +14,7 @@ import {
   GraduationCap,
   Brain,
   UserPen,
+  FolderOpen,
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
@@ -39,6 +40,7 @@ const MENU_ITEMS = [
   { title: "Home", url: "/", icon: Home },
   { title: "Dashboard", url: "/teacher/dashboard", icon: LayoutDashboard },
   { title: "My Materials", url: "/teacher/materials", icon: FileText },
+  { title: "My Resources", url: "/teacher/resources", icon: FolderOpen },
   { title: "Quizzes", url: "/teacher/quizzes", icon: HelpCircle },
   { title: "MCQ Manager", url: "/teacher/mcq-manager", icon: Brain },
   { title: "Assignments", url: "/teacher/assignments", icon: ClipboardList },
@@ -162,7 +164,21 @@ export function TeacherLayout({ children }: TeacherLayoutProps) {
               </Button>
             </div>
           </header>
-          <main className="flex-1 overflow-auto p-4 md:p-6">{children}</main>
+          <main className="flex-1 overflow-auto p-4 md:p-6">
+            {user?.role === "teacher" && !user.isApproved && (
+              <div className="mb-6 rounded-lg border border-blue-200 bg-blue-50 p-4 text-blue-800 dark:border-blue-900/30 dark:bg-blue-900/10 dark:text-blue-300">
+                <div className="flex items-center gap-2">
+                  <Brain className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                  <h3 className="font-semibold text-blue-900 dark:text-blue-100">Verification Complete - Approval Pending</h3>
+                </div>
+                <p className="mt-1 text-sm leading-relaxed">
+                  Your teacher account is verified, but your school/organization is still being approved by an admin.
+                  You can explore resources and use the app in read-only mode for now. Management and upload features will be enabled once approved.
+                </p>
+              </div>
+            )}
+            {children}
+          </main>
         </div>
       </div>
     </SidebarProvider>

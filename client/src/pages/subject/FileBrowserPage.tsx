@@ -6,10 +6,12 @@ import { Breadcrumbs, type BreadcrumbItem } from "@/components/files/Breadcrumbs
 import { FolderRow } from "@/components/files/FolderRow";
 import { FileRow } from "@/components/files/FileRow";
 import { ScrollableFileTypeFilterBar } from "@/components/files/FileTypeFilterBar";
-import { FileQuestion } from "lucide-react";
+import { FileQuestion, LayoutGrid, List as ListIcon } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import type { Subject, Board, Qualification, Branch, ResourceCategory, ResourceNode, FileAsset, FileType } from "@/lib/curriculumData";
 import { Skeleton } from "@/components/ui/skeleton";
+import { MultiViewResourceBrowser } from "@/components/resources/MultiViewResourceBrowser";
+import { Button } from "@/components/ui/button";
 import { parseCAIEFilename } from "@shared/caie-utils";
 import { cn } from "@/lib/utils";
 
@@ -32,6 +34,7 @@ export function FileBrowserPage() {
     const [selectedFileType, setSelectedFileType] = useState<FileType | null>(null);
     const [selectedPaper, setSelectedPaper] = useState<number | null>(null);
     const [selectedVariant, setSelectedVariant] = useState<number | null>(null);
+    const [isMultiView, setIsMultiView] = useState(false);
 
     // Fetch context
     const { data: context, isLoading: contextLoading } = useQuery<SubjectContext>({
@@ -54,6 +57,12 @@ export function FileBrowserPage() {
     const { data: files = [], isLoading: filesLoading } = useQuery<FileAsset[]>({
         queryKey: [`/api/curriculum/nodes/${folderId}/files`],
         enabled: !!folderId,
+    });
+
+    // Fetch all files for this resource category (for multi-view)
+    const { data: allFiles = [], isLoading: allFilesLoading } = useQuery<FileAsset[]>({
+        queryKey: [`/api/curriculum/subjects/${subjectId}/resource/${resourceKey}/files`],
+        enabled: !!subjectId && !!resourceKey,
     });
 
     // Enrich files with CAIE metadata if missing
@@ -87,7 +96,7 @@ export function FileBrowserPage() {
         enabled: !!folderId,
     });
 
-    const isLoading = contextLoading || categoriesLoading || folderNodesLoading || (filesLoading && !!folderId) || (currentFolderLoading && !!folderId);
+    const isLoading = contextLoading || categoriesLoading || folderNodesLoading || (filesLoading && !!folderId) || (currentFolderLoading && !!folderId) || (allFilesLoading && isMultiView);
 
     // Get available file types (must be before early returns)
     const availableFileTypes = useMemo(() => {
@@ -144,6 +153,31 @@ export function FileBrowserPage() {
             return typeMatch && paperMatch && variantMatch;
         });
     }, [enrichedFiles, selectedFileType, selectedPaper, selectedVariant]);
+
+    // Find matching MS/QP pairs for multi-view redirection
+    const matchingPairs = useMemo(() => {
+        const pairs = new Map<string, string>(); // fileId -> relatedFileId
+
+        enrichedFiles.forEach(f => {
+            if (f.fileType !== 'qp' && f.fileType !== 'ms') return;
+
+            const targetType = f.fileType === 'qp' ? 'ms' : 'qp';
+            const related = enrichedFiles.find(other =>
+                other.id !== f.id &&
+                other.fileType === targetType &&
+                other.year === f.year &&
+                other.session === f.session &&
+                other.paper === f.paper &&
+                other.variant === f.variant
+            );
+
+            if (related) {
+                pairs.set(f.id, related.id);
+            }
+        });
+
+        return pairs;
+    }, [enrichedFiles]);
 
     if (!isLoading && (!context || !category)) {
         return (
@@ -203,6 +237,26 @@ export function FileBrowserPage() {
                     title={title}
                     subtitle={subject.subjectName}
                     backHref={backHref}
+                    rightContent={
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setIsMultiView(!isMultiView)}
+                            className="gap-2"
+                        >
+                            {isMultiView ? (
+                                <>
+                                    <ListIcon className="h-4 w-4" />
+                                    <span>Standard View</span>
+                                </>
+                            ) : (
+                                <>
+                                    <LayoutGrid className="h-4 w-4" />
+                                    <span>Multi-view</span>
+                                </>
+                            )}
+                        </Button>
+                    }
                 />
 
                 {/* Breadcrumbs */}
@@ -308,59 +362,81 @@ export function FileBrowserPage() {
                 </section>
 
                 {/* Content */}
-                <section className="mt-6 space-y-6">
-                    {/* Folders */}
-                    {folderNodes.length > 0 && (
-                        <div>
-                            <h2 className="mb-3 text-sm font-medium text-muted-foreground">
-                                Folders
-                            </h2>
-                            <div className="space-y-2">
-                                {folderNodes.map((node) => {
-                                    return (
-                                        <FolderRow
-                                            key={node.id}
-                                            node={node}
-                                            href={getFolderHref(node.id)}
-                                        // We don't have counts easily without fetching everything
-                                        // Maybe just omit for now or add a count route
+                {isMultiView ? (
+                    <div className="mt-8">
+                        <MultiViewResourceBrowser
+                            resources={allFiles.map(f => ({
+                                id: f.id,
+                                title: f.title || f.fileName || "Untitled Resource",
+                                type: (f.fileType as string) === 'qp' || (f.fileType as string) === 'ms' ? 'past_paper' : 'notes',
+                                subject: subject.subjectName,
+                                year: f.year || undefined,
+                                session: f.session || undefined,
+                                paper: f.paper || undefined,
+                                downloadCount: f.downloadCount || 0,
+                                createdAt: f.createdAt || new Date().toISOString(),
+                                fileSize: f.fileSize || undefined,
+                            }))}
+                            isLoading={isLoading}
+                        />
+                    </div>
+                ) : (
+                    <section className="mt-6 space-y-6">
+                        {/* Folders */}
+                        {folderNodes.length > 0 && (
+                            <div>
+                                <h2 className="mb-3 text-sm font-medium text-muted-foreground">
+                                    Folders
+                                </h2>
+                                <div className="space-y-2">
+                                    {folderNodes.map((node) => {
+                                        return (
+                                            <FolderRow
+                                                key={node.id}
+                                                node={node}
+                                                href={getFolderHref(node.id)}
+                                            />
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Files */}
+                        {filteredFiles.length > 0 && (
+                            <div>
+                                <h2 className="mb-3 text-sm font-medium text-muted-foreground">
+                                    Files {selectedFileType && `(${selectedFileType.toUpperCase()})`}
+                                </h2>
+                                <div className="space-y-2">
+                                    {filteredFiles.map((file) => (
+                                        <FileRow
+                                            key={file.id}
+                                            file={file}
+                                            relatedFileId={matchingPairs.get(file.id)}
                                         />
-                                    );
-                                })}
+                                    ))}
+                                </div>
                             </div>
-                        </div>
-                    )}
+                        )}
 
-                    {/* Files */}
-                    {filteredFiles.length > 0 && (
-                        <div>
-                            <h2 className="mb-3 text-sm font-medium text-muted-foreground">
-                                Files {selectedFileType && `(${selectedFileType.toUpperCase()})`}
-                            </h2>
-                            <div className="space-y-2">
-                                {filteredFiles.map((file) => (
-                                    <FileRow key={file.id} file={file} />
-                                ))}
+                        {/* Empty State */}
+                        {folderNodes.length === 0 && files.length === 0 && (
+                            <div className="rounded-lg border border-dashed p-8 text-center">
+                                <FileQuestion className="mx-auto h-12 w-12 text-muted-foreground" />
+                                <p className="mt-4 text-muted-foreground">
+                                    This folder is empty
+                                </p>
+                                <Link
+                                    href={`/subject/${subject.id}/resource/${resourceKey}`}
+                                    className="mt-2 inline-block text-sm text-primary hover:underline"
+                                >
+                                    ← Back to {category!.displayName}
+                                </Link>
                             </div>
-                        </div>
-                    )}
-
-                    {/* Empty State */}
-                    {folderNodes.length === 0 && files.length === 0 && (
-                        <div className="rounded-lg border border-dashed p-8 text-center">
-                            <FileQuestion className="mx-auto h-12 w-12 text-muted-foreground" />
-                            <p className="mt-4 text-muted-foreground">
-                                This folder is empty
-                            </p>
-                            <Link
-                                href={`/subject/${subject.id}/resource/${resourceKey}`}
-                                className="mt-2 inline-block text-sm text-primary hover:underline"
-                            >
-                                ← Back to {category!.displayName}
-                            </Link>
-                        </div>
-                    )}
-                </section>
+                        )}
+                    </section>
+                )}
             </div>
         </CurriculumLayout>
     );

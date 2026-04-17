@@ -22,19 +22,24 @@ export interface UploadResult {
 }
 
 /**
- * Validate that a file is a valid PDF and within size limits.
+ * Validate that a file is a valid type and within size limits.
  */
-export function validatePdf(file: { mimetype: string; size: number; originalname: string }): { valid: boolean; error?: string } {
-    if (!ALLOWED_MIME_TYPES.includes(file.mimetype)) {
-        return { valid: false, error: `Invalid file type: ${file.mimetype}. Only PDF files are allowed.` };
+export function validateFile(file: { mimetype: string; size: number; originalname: string }, allowedTypes: string[] = ['application/pdf']): { valid: boolean; error?: string } {
+    if (!allowedTypes.includes(file.mimetype)) {
+        return { valid: false, error: `Invalid file type: ${file.mimetype}. Allowed types: ${allowedTypes.join(', ')}` };
     }
     if (file.size > MAX_FILE_SIZE) {
         return { valid: false, error: `File too large: ${(file.size / 1024 / 1024).toFixed(1)}MB. Maximum is 100MB.` };
     }
-    if (!file.originalname.toLowerCase().endsWith('.pdf')) {
-        return { valid: false, error: 'File must have a .pdf extension.' };
-    }
     return { valid: true };
+}
+
+/**
+ * Validate that a file is a valid PDF and within size limits.
+ * @deprecated Use validateFile instead
+ */
+export function validatePdf(file: { mimetype: string; size: number; originalname: string }): { valid: boolean; error?: string } {
+    return validateFile(file, ['application/pdf']);
 }
 
 /**

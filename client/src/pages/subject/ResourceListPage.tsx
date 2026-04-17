@@ -6,11 +6,13 @@ import { FolderRow } from "@/components/files/FolderRow";
 import { FileRow, getUniqueFileTypes } from "@/components/files/FileRow";
 import { ScrollableFileTypeFilterBar } from "@/components/files/FileTypeFilterBar";
 import { Card, CardContent } from "@/components/ui/card";
-import { ArrowRight, Calendar, ListTree, CheckCircle, FileQuestion } from "lucide-react";
+import { ArrowRight, Calendar, ListTree, CheckCircle, FileQuestion, LayoutGrid, List as ListIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import type { Subject, Board, Qualification, Branch, ResourceCategory, ResourceNode, FileAsset, FileType } from "@/lib/curriculumData";
 import { Skeleton } from "@/components/ui/skeleton";
+import { MultiViewResourceBrowser } from "@/components/resources/MultiViewResourceBrowser";
+import { Button } from "@/components/ui/button";
 
 interface SubjectContext {
     subject: Subject;
@@ -30,6 +32,7 @@ const pastPapersModes = [
 export function ResourceListPage() {
     const { subjectId, resourceKey } = useParams<{ subjectId: string; resourceKey: string }>();
     const [selectedFileType, setSelectedFileType] = useState<FileType | null>(null);
+    const [isMultiView, setIsMultiView] = useState(false);
 
     // Fetch context
     const { data: context, isLoading: contextLoading } = useQuery<SubjectContext>({
@@ -53,6 +56,32 @@ export function ResourceListPage() {
         queryKey: [`/api/curriculum/subjects/${subjectId}/resource/${resourceKey}/files`],
         enabled: !!subjectId && !!resourceKey,
     });
+
+    // Find matching MS/QP pairs for multi-view redirection
+    // Fixed: Moved to top to avoid conditional hook call errors
+    const matchingPairs = useMemo(() => {
+        const pairs = new Map<string, string>(); // fileId -> relatedFileId
+
+        allFiles.forEach(f => {
+            if (f.fileType !== 'qp' && f.fileType !== 'ms') return;
+
+            const targetType = f.fileType === 'qp' ? 'ms' : 'qp';
+            const related = allFiles.find(other =>
+                other.id !== f.id &&
+                other.fileType === targetType &&
+                other.year === f.year &&
+                other.session === f.session &&
+                other.paper === f.paper &&
+                other.variant === f.variant
+            );
+
+            if (related) {
+                pairs.set(f.id, related.id);
+            }
+        });
+
+        return pairs;
+    }, [allFiles]);
 
     const isLoading = contextLoading || categoriesLoading || rootNodesLoading || filesLoading;
 
@@ -114,64 +143,108 @@ export function ResourceListPage() {
                     subtitle={subject.subjectName}
                     backHref={`/subject/${subject.id}`}
                     breadcrumbs={breadcrumbs}
+                    rightContent={
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setIsMultiView(!isMultiView)}
+                            className="gap-2"
+                        >
+                            {isMultiView ? (
+                                <>
+                                    <ListIcon className="h-4 w-4" />
+                                    <span>Standard View</span>
+                                </>
+                            ) : (
+                                <>
+                                    <LayoutGrid className="h-4 w-4" />
+                                    <span>Multi-view</span>
+                                </>
+                            )}
+                        </Button>
+                    }
                 />
 
-                {/* File Type Filter */}
-                {availableFileTypes.length > 0 && (
-                    <section className="mt-8">
-                        <div className="flex items-center justify-between">
-                            <h2 className="text-lg font-semibold">Filter by Type</h2>
-                        </div>
-                        <ScrollableFileTypeFilterBar
-                            selectedType={selectedFileType}
-                            onSelect={setSelectedFileType}
-                            availableTypes={availableFileTypes}
-                            className="mt-3"
+                {isMultiView ? (
+                    <div className="mt-8">
+                        <MultiViewResourceBrowser
+                            resources={allFiles.map(f => ({
+                                id: f.id,
+                                title: f.title || f.fileName || "Untitled Resource",
+                                type: (f.fileType as string) === 'qp' || (f.fileType as string) === 'ms' ? 'past_paper' : 'notes', // Simplified mapping
+                                subject: subject.subjectName,
+                                year: f.year || undefined,
+                                session: f.session || undefined,
+                                paper: f.paper || undefined,
+                                downloadCount: 0,
+                                createdAt: new Date().toISOString(),
+                            }))}
+                            isLoading={isLoading}
                         />
-                    </section>
-                )}
-
-                {/* Folders */}
-                {rootNodes.length > 0 && (
-                    <section className="mt-8">
-                        <h2 className="mb-4 text-lg font-semibold">Folders</h2>
-                        <div className="space-y-2">
-                            {rootNodes.map((node) => {
-                                return (
-                                    <FolderRow
-                                        key={node.id}
-                                        node={node}
-                                        href={`/subject/${subject.id}/files?resource=${resourceKey}&folder=${node.id}`}
-                                    // We don't have child counts easily without fetching everything
-                                    />
-                                );
-                            })}
-                        </div>
-                    </section>
-                )}
-
-                {/* Direct Files */}
-                {filteredFiles.length > 0 && (
-                    <section className="mt-8">
-                        <h2 className="mb-4 text-lg font-semibold">
-                            Files {selectedFileType && `(${selectedFileType.toUpperCase()})`}
-                        </h2>
-                        <div className="space-y-2">
-                            {filteredFiles.map((file) => (
-                                <FileRow key={file.id} file={file} />
-                            ))}
-                        </div>
-                    </section>
-                )}
-
-                {/* Empty State */}
-                {rootNodes.length === 0 && allFiles.length === 0 && (
-                    <div className="mt-8 rounded-lg border border-dashed p-8 text-center">
-                        <FileQuestion className="mx-auto h-12 w-12 text-muted-foreground" />
-                        <p className="mt-4 text-muted-foreground">
-                            No resources available yet
-                        </p>
                     </div>
+                ) : (
+                    <>
+                        {/* File Type Filter */}
+                        {availableFileTypes.length > 0 && (
+                            <section className="mt-8">
+                                <div className="flex items-center justify-between">
+                                    <h2 className="text-lg font-semibold">Filter by Type</h2>
+                                </div>
+                                <ScrollableFileTypeFilterBar
+                                    selectedType={selectedFileType}
+                                    onSelect={setSelectedFileType}
+                                    availableTypes={availableFileTypes}
+                                    className="mt-3"
+                                />
+                            </section>
+                        )}
+
+                        {/* Folders */}
+                        {rootNodes.length > 0 && (
+                            <section className="mt-8">
+                                <h2 className="mb-4 text-lg font-semibold">Folders</h2>
+                                <div className="space-y-2">
+                                    {rootNodes.map((node) => {
+                                        return (
+                                            <FolderRow
+                                                key={node.id}
+                                                node={node}
+                                                href={`/subject/${subject.id}/files?resource=${resourceKey}&folder=${node.id}`}
+                                            />
+                                        );
+                                    })}
+                                </div>
+                            </section>
+                        )}
+
+                        {/* Direct Files */}
+                        {filteredFiles.length > 0 && (
+                            <section className="mt-8">
+                                <h2 className="mb-4 text-lg font-semibold">
+                                    Files {selectedFileType && `(${selectedFileType.toUpperCase()})`}
+                                </h2>
+                                <div className="space-y-2">
+                                    {filteredFiles.map((file) => (
+                                        <FileRow
+                                            key={file.id}
+                                            file={file}
+                                            relatedFileId={matchingPairs.get(file.id)}
+                                        />
+                                    ))}
+                                </div>
+                            </section>
+                        )}
+
+                        {/* Empty State */}
+                        {rootNodes.length === 0 && allFiles.length === 0 && (
+                            <div className="mt-8 rounded-lg border border-dashed p-8 text-center">
+                                <FileQuestion className="mx-auto h-12 w-12 text-muted-foreground" />
+                                <p className="mt-4 text-muted-foreground">
+                                    No resources available yet
+                                </p>
+                            </div>
+                        )}
+                    </>
                 )}
             </div>
         </CurriculumLayout>

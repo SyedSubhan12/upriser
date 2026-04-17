@@ -28,19 +28,14 @@ export function HomePage() {
         <CurriculumLayout>
             {/* Hero Section with Floating Lines background */}
             <section className="relative overflow-hidden pt-8 pb-16 sm:pt-12 sm:pb-24 md:pt-20 md:pb-32">
-                {/* Light mode: soft gradient background */}
+                {/* Light mode: clean white background */}
                 {!isDark && (
-                    <div
-                        className="absolute inset-0 -z-20"
-                        style={{
-                            background: "linear-gradient(135deg, #f8faff 0%, #eef3ff 25%, #e8efff 50%, #f0eafc 75%, #faf7ff 100%)",
-                        }}
-                    />
+                    <div className="absolute inset-0 -z-20 bg-white" />
                 )}
 
                 {/* Floating Lines animation — dark mode only */}
                 {isDark && (
-                    <div className="absolute inset-0 -z-10 opacity-90">
+                    <div className="absolute inset-0 -z-10 opacity-80">
                         <FloatingLines
                             linesGradient={["#38bdf8", "#6366f1", "#ec4899"]}
                             enabledWaves={["top", "middle", "bottom"]}
@@ -53,35 +48,23 @@ export function HomePage() {
                             bendRadius={6}
                             bendStrength={-0.35}
                             mouseDamping={0.1}
-                            mixBlendMode="lighten"
+                            mixBlendMode="screen"
                         />
                     </div>
                 )}
 
-                {/* Light mode: subtle radial glow accents */}
+                {/* Light mode: radial glow accents — subtle only */}
                 {!isDark && (
-                    <>
-                        <div
-                            className="absolute -z-[5] rounded-full blur-3xl"
-                            style={{
-                                width: "500px",
-                                height: "500px",
-                                top: "-100px",
-                                right: "-100px",
-                                background: "radial-gradient(circle, rgba(147,197,253,0.2) 0%, transparent 70%)",
-                            }}
-                        />
-                        <div
-                            className="absolute -z-[5] rounded-full blur-3xl"
-                            style={{
-                                width: "400px",
-                                height: "400px",
-                                bottom: "-50px",
-                                left: "-50px",
-                                background: "radial-gradient(circle, rgba(196,181,253,0.15) 0%, transparent 70%)",
-                            }}
-                        />
-                    </>
+                    <div
+                        className="absolute -z-[5] rounded-full blur-3xl opacity-30"
+                        style={{
+                            width: "500px",
+                            height: "500px",
+                            top: "-100px",
+                            right: "-100px",
+                            background: "radial-gradient(circle, rgba(147,197,253,0.1) 0%, transparent 70%)",
+                        }}
+                    />
                 )}
 
                 <div className="relative z-10 mx-auto max-w-7xl px-4 md:px-6">
@@ -111,10 +94,10 @@ export function HomePage() {
                             <div className="mt-6 sm:mt-8 mb-4 w-full max-w-6xl hidden sm:block">
                                 <CurvedLoop
                                     marqueeText="Past Papers • Study Notes • Timetables • Syllabus • Past Papers • Study Notes • "
-                                    speed={1.8}
-                                    curveAmount={220}
+                                    speed={1.2}
+                                    curveAmount={160}
                                     interactive={false}
-                                    className="tracking-tight fill-slate-700 text-4xl sm:text-5xl md:text-6xl"
+                                    className="tracking-tight fill-black text-4xl sm:text-5xl md:text-6xl"
                                 />
                             </div>
                         )}

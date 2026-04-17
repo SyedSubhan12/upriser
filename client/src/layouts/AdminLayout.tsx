@@ -14,6 +14,7 @@ import {
   GraduationCap,
   MessageSquare,
   FolderOpen,
+  UserCheck,
 } from "lucide-react";
 
 import { useAuth } from "@/context/AuthContext";
@@ -42,6 +43,7 @@ const MENU_ITEMS = [
   { title: "Boards & Subjects", url: "/admin/boards", icon: Layers },
   { title: "Resources", url: "/admin/resources", icon: FolderOpen },
   { title: "Users", url: "/admin/users", icon: Users },
+  { title: "Teacher Approvals", url: "/admin/teachers", icon: UserCheck },
   { title: "Content Moderation", url: "/admin/moderation", icon: Shield },
   { title: "Analytics", url: "/admin/analytics", icon: BarChart3 },
   { title: "Feedback", url: "/admin/feedback", icon: MessageSquare },

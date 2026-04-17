@@ -96,7 +96,7 @@ export function QuizResultsPage() {
     <div className="space-y-6">
       <PageHeader
         title="Quiz Results"
-        description={`${quiz.title} - ${subject?.name || "Unknown Subject"}`}
+        description={`${quiz.title} - ${subject?.subjectName || "Unknown Subject"}`}
         actions={
           <Link href="/teacher/quizzes">
             <Button variant="outline" data-testid="button-back-to-quizzes">

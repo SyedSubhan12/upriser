@@ -17,11 +17,20 @@ interface AuthUser {
   createdAt?: Date | null;
 }
 
+interface LoginResult {
+  success: boolean;
+  error?: string;
+  needsEmailVerification?: boolean;
+  email?: string;
+  maskedEmail?: string;
+  needsApproval?: boolean;
+}
+
 interface AuthContextType {
   user: AuthUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  login: (email: string, password: string) => Promise<LoginResult>;
   logout: () => void;
   updateUser: (updates: Partial<AuthUser>) => void;
 }
@@ -44,9 +53,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Check authentication status
   useEffect(() => {
+    const controller = new AbortController();
     const checkAuth = async () => {
       try {
-        const response = await fetch("/api/auth/me", { credentials: "include" });
+        const response = await fetch("/api/auth/me", { 
+          credentials: "include",
+          signal: controller.signal
+        });
         if (response.ok) {
           const userData = await response.json();
           setUser(userData);
@@ -56,7 +69,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(null);
           localStorage.removeItem("ExamsValley_user");
         }
-      } catch {
+      } catch (error: any) {
+        if (error.name === 'AbortError') return;
+        
         const storedUser = localStorage.getItem("ExamsValley_user");
         if (storedUser) {
           try {
@@ -71,15 +86,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     checkAuth();
+    return () => controller.abort();
   }, []);
 
   // Poll for user status changes (check if account was deactivated)
   useEffect(() => {
     if (!user) return;
 
+    const controller = new AbortController();
     const checkUserStatus = async () => {
       try {
-        const response = await fetch("/api/auth/me", { credentials: "include" });
+        const response = await fetch("/api/auth/me", { 
+          credentials: "include",
+          signal: controller.signal
+        });
 
         if (response.status === 403) {
           // Account has been deactivated - force logout
@@ -96,7 +116,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             localStorage.setItem("ExamsValley_user", JSON.stringify(userData));
           }
         }
-      } catch (error) {
+      } catch (error: any) {
+        if (error.name === 'AbortError') return;
         console.error("Error checking user status:", error);
       }
     };
@@ -104,14 +125,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Check every 10 seconds for immediate response when account is deactivated
     const interval = setInterval(checkUserStatus, 10000);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      controller.abort();
+    };
   }, [user, logout]);
 
   const login = useCallback(async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      const response = await apiRequest("POST", "/api/auth/login", { email, password });
-      const userData = await response.json();
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ email, password }),
+      });
+
+      const payload = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        setIsLoading(false);
+        return {
+          success: false,
+          error: payload?.message || payload?.error || "Invalid email or password",
+          needsEmailVerification: payload?.needsEmailVerification,
+          email: payload?.email,
+          maskedEmail: payload?.maskedEmail,
+          needsApproval: payload?.needsApproval,
+        };
+      }
+
+      const userData = payload;
       setUser(userData);
       localStorage.setItem("ExamsValley_user", JSON.stringify(userData));
       setIsLoading(false);
