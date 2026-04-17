@@ -5,7 +5,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "npm run dev:server",
-    "dev:server": "NODE_ENV=development tsx server/index.ts",
+    "dev:server": "NODE_ENV=development tsx watch server/index.ts",
     "dev:client": "vite",
     "build": "tsx script/build.ts",
     "start": "NODE_ENV=production node dist/index.cjs",
@@ -16,7 +16,8 @@
     "bulk-upload": "tsx server/bulk-upload.ts",
     "upload-past-papers": "tsx server/upload-past-papers.ts",
     "upload-past-papers:dry": "tsx server/upload-past-papers.ts --dry-run",
-    "maintenance": "tsx server/maintenance.ts"
+    "maintenance": "tsx server/maintenance.ts",
+    "test": "vitest run"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -101,14 +102,17 @@
     "@types/passport-local": "^1.0.38",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.1",
+    "@types/supertest": "^2.0.16",
     "@vitejs/plugin-react": "^4.7.0",
     "autoprefixer": "^10.4.20",
     "drizzle-kit": "^0.31.4",
     "esbuild": "^0.25.0",
     "postcss": "^8.4.47",
+    "supertest": "^6.3.4",
     "tailwindcss": "^3.4.17",
     "tsx": "^4.20.5",
     "typescript": "5.6.3",
-    "vite": "^5.4.20"
+    "vite": "^5.4.20",
+    "vitest": "^1.6.1"
   }
 }

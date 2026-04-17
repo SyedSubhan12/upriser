@@ -11,9 +11,19 @@ import { passport } from "./auth.js";
 import bcrypt from "bcryptjs";
 import { registerAdminRoutes } from "./admin-routes.js";
 import { registerMcqRoutes } from "./mcq-routes.js";
-import { requireAuth, requireRole } from "./middleware/rbac.js";
+import { requireAuth, requireRole, requireApproved } from "./middleware/rbac.js";
 import { authLimiter, apiLimiter, adminMutationLimiter } from "./middleware/rate-limit.js";
-import { uploadPdf, validatePdf, checkDuplicate, buildObjectKey, getPublicUrl, enrichFileWithUrl, deleteFile } from "./supabase-storage.js";
+import { uploadPdf, validatePdf, validateFile, checkDuplicate, buildObjectKey, getPublicUrl, enrichFileWithUrl, deleteFile } from "./supabase-storage.js";
+import {
+  generateTeacherVerificationOtp,
+  getTeacherVerificationExpiryDate,
+  getTeacherVerificationExpiryMinutes,
+  hashTeacherVerificationOtp,
+  maskEmailAddress,
+  sendTeacherVerificationOtpEmail,
+  verifyTeacherVerificationOtp,
+} from "./services/teacher-email-verification.js";
+import { validateAuthEmailAddress } from "../shared/email-validation.js";
 
 // Configure multer for file uploads (in-memory storage)
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 100 * 1024 * 1024 } });
@@ -37,6 +47,41 @@ import {
   insertStudentRegistrationSchema,
   insertTutorRegistrationSchema
 } from "../shared/schema.js";
+
+const teacherVerificationEmailSchema = z.object({
+  email: z.string().email("A valid email address is required"),
+});
+
+const teacherVerificationOtpSchema = teacherVerificationEmailSchema.extend({
+  otp: z.string().regex(/^\d{6}$/, "OTP must be a 6-digit code"),
+});
+
+async function issueTeacherVerificationOtp(user: { id: string; email: string; name: string }) {
+  const otp = generateTeacherVerificationOtp();
+  const expiresAt = getTeacherVerificationExpiryDate();
+
+  await storage.updateUser(user.id, {
+    emailVerificationToken: hashTeacherVerificationOtp(user.email, otp),
+    emailVerificationExpires: expiresAt,
+    emailVerificationResendCount: (user as any).emailVerificationResendCount + 1,
+    lastResentAt: new Date(),
+    updatedAt: new Date(),
+  });
+
+  try {
+    const delivery = await sendTeacherVerificationOtpEmail(user, otp);
+    return { delivery, expiresAt };
+  } catch (error) {
+    console.error("Teacher OTP delivery error:", error);
+    return {
+      delivery: {
+        delivered: false,
+        provider: "console" as const,
+      },
+      expiresAt,
+    };
+  }
+}
 
 export async function registerRoutes(
   httpServer: Server,
@@ -83,7 +128,12 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Email and password are required" });
       }
 
-      const user = await storage.getUserByEmail(email);
+      const emailValidation = validateAuthEmailAddress(email);
+      if (!emailValidation.isValid) {
+        return res.status(400).json({ error: emailValidation.error });
+      }
+
+      const user = await storage.getUserByEmail(emailValidation.normalizedEmail);
       if (!user) {
         return res.status(401).json({ error: "Invalid credentials" });
       }
@@ -92,6 +142,26 @@ export async function registerRoutes(
       const isPasswordValid = user.password ? await bcrypt.compare(password, user.password) : false;
       if (!isPasswordValid) {
         return res.status(401).json({ error: "Invalid credentials" });
+      }
+
+      // Check email verification for teachers
+      if (user.role === "teacher" && !user.isEmailVerified) {
+        return res.status(403).json({
+          error: "Email not verified",
+          message: "Please verify your email with the OTP sent to your inbox before logging in.",
+          needsEmailVerification: true,
+          email: user.email,
+          maskedEmail: maskEmailAddress(user.email),
+        });
+      }
+
+      // Check teacher approval status
+      if (user.role === "teacher" && !user.isApproved) {
+        return res.status(403).json({
+          error: "Account pending approval",
+          message: "Your teacher account is pending admin approval. You will be notified once approved.",
+          needsApproval: true
+        });
       }
 
       if (!user.isActive) {
@@ -259,6 +329,275 @@ export async function registerRoutes(
     }
   });
 
+  // ============================================================================
+  // EMAIL VERIFICATION ROUTES
+  // ============================================================================
+
+  // Verify email with token
+  app.get("/api/auth/verify-email", async (req: Request, res: Response) => {
+    try {
+      const { token } = req.query;
+
+      if (!token || typeof token !== "string") {
+        return res.status(400).json({ error: "Verification token is required" });
+      }
+
+      // Find user by verification token
+      const allUsers = await storage.getAllUsers();
+      const user = allUsers.find(u => u.emailVerificationToken === token);
+
+      if (!user) {
+        return res.status(400).json({ error: "Invalid verification token" });
+      }
+
+      // Check if token has expired
+      if (user.emailVerificationExpires && new Date() > user.emailVerificationExpires) {
+        return res.status(400).json({
+          error: "Verification token has expired",
+          expired: true
+        });
+      }
+
+      // Mark email as verified
+      const updated = await storage.updateUser(user.id, {
+        isEmailVerified: true,
+        emailVerificationToken: null,
+        emailVerificationExpires: null,
+        updatedAt: new Date(),
+      });
+
+      if (!updated) {
+        return res.status(500).json({ error: "Failed to verify email" });
+      }
+
+      // If this is a teacher and they're now verified but still need approval
+      if (updated.role === "teacher" && !updated.isApproved) {
+        return res.json({
+          success: true,
+          message: "Email verified successfully. Your account is pending admin approval.",
+          needsApproval: true
+        });
+      }
+
+      // Activate the user if they were pending
+      if (!updated.isActive) {
+        await storage.updateUser(user.id, { isActive: true });
+      }
+
+      return res.json({ success: true, message: "Email verified successfully" });
+    } catch (error) {
+      console.error("Email verification error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/auth/verify-email-otp", authLimiter, async (req: Request, res: Response) => {
+    try {
+      const parsed = teacherVerificationOtpSchema.safeParse(req.body);
+      if (!parsed.success) {
+        const firstError = parsed.error.issues[0];
+        let errorMessage = "Invalid verification request";
+
+        if (firstError) {
+          if (firstError.path.includes("email")) {
+            errorMessage = firstError.message || "A valid email address is required";
+          } else if (firstError.path.includes("otp")) {
+            errorMessage = firstError.message || "OTP must be a 6-digit code";
+          } else {
+            errorMessage = firstError.message || "Invalid verification request";
+          }
+        }
+
+        return res.status(400).json({ error: errorMessage });
+      }
+
+      const user = await storage.getUserByEmail(parsed.data.email);
+      if (!user || user.role !== "teacher") {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      if (user.isEmailVerified) {
+        return res.json({
+          success: true,
+          alreadyVerified: true,
+          message: user.isApproved
+            ? "Email is already verified. You can log in now."
+            : "Email is already verified. Your account is pending admin approval.",
+          needsApproval: !user.isApproved,
+        });
+      }
+
+      if (user.emailVerificationExpires && new Date() > user.emailVerificationExpires) {
+        return res.status(400).json({
+          error: "Verification code has expired",
+          expired: true,
+        });
+      }
+
+      const isOtpValid = verifyTeacherVerificationOtp(
+        user.email,
+        parsed.data.otp,
+        user.emailVerificationToken,
+      );
+
+      if (!isOtpValid) {
+        return res.status(400).json({ error: "Invalid verification code" });
+      }
+
+      const updated = await storage.updateUser(user.id, {
+        isEmailVerified: true,
+        emailVerificationToken: null,
+        emailVerificationExpires: null,
+        emailVerificationResendCount: 0, // Reset count
+        isActive: true,
+        updatedAt: new Date(),
+      });
+
+      if (!updated) {
+        return res.status(500).json({ error: "Failed to verify email" });
+      }
+
+      return res.json({
+        success: true,
+        message: updated.isApproved
+          ? "Email verified successfully. You can log in now."
+          : "Email verified successfully. Your account is pending admin approval.",
+        needsApproval: !updated.isApproved,
+      });
+    } catch (error) {
+      console.error("Teacher OTP verification error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Resend verification OTP (for teachers)
+  app.post("/api/auth/resend-verification", authLimiter, async (req: Request, res: Response) => {
+    try {
+      const parsed = teacherVerificationEmailSchema.safeParse(req.body);
+      if (!parsed.success) {
+        const firstError = parsed.error.issues[0];
+        const errorMessage = firstError?.path.includes("email")
+          ? (firstError.message || "A valid email address is required")
+          : "Invalid resend request";
+        return res.status(400).json({ error: errorMessage });
+      }
+
+      const user = await storage.getUserByEmail(parsed.data.email);
+      if (!user || user.role !== "teacher") {
+        return res.status(404).json({ error: "Teacher account not found" });
+      }
+
+      if (user.isEmailVerified) {
+        return res.status(400).json({ error: "Email is already verified" });
+      }
+
+      // Max resend attempts check (e.g., 5 attempts)
+      const MAX_RESEND_ATTEMPTS = 5;
+      const RESEND_COOLDOWN_SECONDS = 60;
+
+      if (user.emailVerificationResendCount >= MAX_RESEND_ATTEMPTS) {
+        return res.status(429).json({ 
+          error: "Maximum resend attempts reached. Please contact support.",
+          maxAttemptsReached: true 
+        });
+      }
+
+      if (user.lastResentAt && (Date.now() - new Date(user.lastResentAt).getTime() < RESEND_COOLDOWN_SECONDS * 1000)) {
+        const remaining = Math.ceil((RESEND_COOLDOWN_SECONDS * 1000 - (Date.now() - new Date(user.lastResentAt).getTime())) / 1000);
+        return res.status(429).json({ 
+          error: `Please wait ${remaining} seconds before requesting another code.`,
+          cooldownRemaining: remaining
+        });
+      }
+
+      const { delivery } = await issueTeacherVerificationOtp(user as any);
+
+      return res.json({
+        success: true,
+        message: delivery.delivered
+          ? "Verification code sent"
+          : "Verification code generated, but email delivery is not configured. Check server logs in development or configure email delivery in production.",
+        email: user.email,
+        maskedEmail: maskEmailAddress(user.email),
+        requiresEmailVerification: true,
+        deliveryMethod: delivery.provider,
+        otpExpiresInMinutes: getTeacherVerificationExpiryMinutes(),
+      });
+    } catch (error) {
+      console.error("Resend verification error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Get current user profile (public, by username)
+  app.get("/api/profile/:username", async (req: Request, res: Response) => {
+    try {
+      const { username: rawUsername } = req.params;
+      const username = decodeURIComponent(rawUsername);
+
+      // Try finding by username first (case-insensitive)
+      let user = await storage.getUserByUsername(username);
+
+      // If not found by username, try finding by name (case-insensitive)
+      if (!user) {
+        const allUsers = await storage.getAllUsers({ role: "teacher", isActive: true });
+        user = allUsers.find(u => 
+          u.isApproved && 
+          (u.name.toLowerCase() === username.toLowerCase() || 
+           u.name.toLowerCase().replace(/\s+/g, '-') === username.toLowerCase().replace(/\s+/g, '-'))
+        );
+      }
+
+      if (!user || user.role !== "teacher" || !user.isApproved || !user.isActive) {
+        return res.status(404).json({ error: "Teacher profile not found" });
+      }
+
+      // Fetch additional tutor registration data
+      const tutorReg = await storage.getTutorRegistrationByUserId(user.id);
+
+      // Count approved materials by this teacher
+      const allMaterials = await storage.getMaterialsByFilters({ uploaderId: user.id, status: "approved" });
+
+      // Resolve subject names if needed
+      let resolvedSubjects: string[] = tutorReg?.subjects || [];
+      if (resolvedSubjects.length === 0 && user.subjectIds && user.subjectIds.length > 0) {
+        const allSubjects = await storage.getAllSubjects();
+        resolvedSubjects = user.subjectIds
+          .map(id => allSubjects.find(s => s.id === id)?.subjectName)
+          .filter((name): name is string => !!name);
+      }
+
+      // Compute average rating from feedback table (platform-wide, not per-teacher — use as platform rating)
+      // For now return null since feedback is platform-wide; can be extended later
+      const ratingAvg: number | null = null;
+
+      // Return enriched public profile
+      return res.json({
+        id: user.id,
+        name: user.name,
+        username: user.username,
+        email: user.email, // public for contact
+        avatar: user.avatar,
+        bio: user.bio || tutorReg?.bio || null,
+        qualifications: user.qualifications,
+        experienceYears: user.experienceYears ?? tutorReg?.experienceYears ?? null,
+        subjectIds: user.subjectIds,
+        // From tutor registration
+        phoneNumber: tutorReg?.phoneNumber || null,
+        degree: tutorReg?.degree || null,
+        subjects: resolvedSubjects,
+        linkedinUrl: tutorReg?.linkedinUrl || null,
+        availableHours: tutorReg?.availableHours || null, // Real data from DB
+        // Stats
+        materialCount: allMaterials.length,
+        rating: (user.rating && user.rating !== "0") ? parseFloat(user.rating) : null, // Return null if unrated ("0" is default)
+      });
+    } catch (error) {
+      console.error("Profile fetch error:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
 
   // Google OAuth routes
   app.get("/api/auth/google", (req: Request, res: Response, next) => {
@@ -291,6 +630,11 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Email, password, and name are required" });
       }
 
+      const emailValidation = validateAuthEmailAddress(email);
+      if (!emailValidation.isValid) {
+        return res.status(400).json({ error: emailValidation.error });
+      }
+
       // Password strength validation
       if (password.length < 8) {
         return res.status(400).json({ error: "Password must be at least 8 characters long" });
@@ -300,7 +644,7 @@ export async function registerRoutes(
       }
 
       // Check if user already exists
-      const existingUser = await storage.getUserByEmail(email);
+      const existingUser = await storage.getUserByEmail(emailValidation.normalizedEmail);
       if (existingUser) {
         return res.status(409).json({ error: "User with this email already exists" });
       }
@@ -311,16 +655,38 @@ export async function registerRoutes(
       // Role selection with security check (only allow student or teacher on self-reg)
       const requestedRole = req.body.role || "student";
       const finalRole = ["student", "teacher"].includes(requestedRole) ? requestedRole : "student";
+      const isTeacher = finalRole === "teacher";
 
-      // Create user 
+      // Create user
       const user = await storage.createUser({
-        email,
+        email: emailValidation.normalizedEmail,
         password: hashedPassword,
         name,
         role: finalRole,
         authProvider: "local",
-        isActive: true,
+        isActive: !isTeacher,
+        isEmailVerified: !isTeacher,
+        emailVerificationToken: null,
+        emailVerificationExpires: isTeacher ? getTeacherVerificationExpiryDate() : null,
+        isApproved: !isTeacher,
       });
+
+      if (isTeacher) {
+        const { delivery } = await issueTeacherVerificationOtp(user);
+
+        return res.status(201).json({
+          success: true,
+          role: "teacher",
+          email: user.email,
+          maskedEmail: maskEmailAddress(user.email),
+          requiresEmailVerification: true,
+          deliveryMethod: delivery.provider,
+          otpExpiresInMinutes: getTeacherVerificationExpiryMinutes(),
+          message: delivery.delivered
+            ? "Teacher account created. Check your email for the verification code."
+            : "Teacher account created, but email delivery is not configured. Check server logs in development or configure email delivery in production.",
+        });
+      }
 
       req.session.userId = user.id;
       const { password: _, ...userWithoutPassword } = user;
@@ -330,6 +696,32 @@ export async function registerRoutes(
       if (error?.code === '23505') {
         return res.status(409).json({ error: "User with this email already exists" });
       }
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Check if email exists (used for real-time validation in login/signup)
+  app.post("/api/auth/check-email", authLimiter, async (req: Request, res: Response) => {
+    try {
+      const { email } = req.body;
+      if (!email || typeof email !== "string") {
+        return res.status(400).json({ error: "Email is required" });
+      }
+
+      const emailValidation = validateAuthEmailAddress(email);
+      if (!emailValidation.isValid) {
+        return res.json({ exists: false, isValid: false, error: emailValidation.error });
+      }
+
+      const user = await storage.getUserByEmail(emailValidation.normalizedEmail);
+      return res.json({
+        exists: !!user,
+        isValid: true,
+        role: user?.role || null,
+        name: user?.name || null,
+      });
+    } catch (error) {
+      console.error("Check email error:", error);
       return res.status(500).json({ error: "Internal server error" });
     }
   });
@@ -671,6 +1063,20 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/curriculum/topics", async (req: Request, res: Response) => {
+    try {
+      const { subjectId } = req.query;
+      if (!subjectId || typeof subjectId !== "string") {
+        return res.status(400).json({ error: "subjectId is required" });
+      }
+      const topics = await storage.getTopicsBySubject(subjectId);
+      return res.json(topics);
+    } catch (error) {
+      console.error("Error fetching topics:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   app.get("/api/curriculum/subjects/:subjectId/context", async (req: Request, res: Response) => {
     try {
       const context = await storage.getSubjectWithContext(req.params.subjectId);
@@ -736,6 +1142,90 @@ export async function registerRoutes(
       return res.json(nodes);
     } catch (error) {
       console.error("Error fetching resource nodes:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // ============================================================================
+  // QUIZ & QUESTION ROUTES
+  // ============================================================================
+
+  app.get("/api/quizzes", async (_req: Request, res: Response) => {
+    try {
+      const quizzes = await storage.getAllQuizzes();
+      return res.json(quizzes);
+    } catch (error) {
+      console.error("Error fetching quizzes:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/teacher/quizzes", requireAuth, requireRole("teacher"), async (req: Request, res: Response) => {
+    try {
+      const quizzes = await storage.getQuizzesByFilters({ creatorId: req.user!.id });
+      return res.json(quizzes);
+    } catch (error) {
+      console.error("Error fetching teacher quizzes:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/quizzes", requireAuth, requireRole("teacher"), async (req: Request, res: Response) => {
+    try {
+      const parsed = insertQuizSchema.safeParse({
+        ...req.body,
+        creatorId: req.user!.id,
+      });
+
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Validation error", issues: parsed.error.issues });
+      }
+
+      const quiz = await storage.createQuiz(parsed.data);
+      return res.status(201).json(quiz);
+    } catch (error) {
+      console.error("Error creating quiz:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/quizzes/:id", requireAuth, requireRole("teacher"), async (req: Request, res: Response) => {
+    try {
+      const quiz = await storage.updateQuiz(req.params.id, req.body);
+      if (!quiz) return res.status(404).json({ error: "Quiz not found" });
+      return res.json(quiz);
+    } catch (error) {
+      console.error("Error updating quiz:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/quizzes/:id/questions", requireAuth, requireRole("teacher"), async (req: Request, res: Response) => {
+    try {
+      const parsed = insertQuestionSchema.safeParse({
+        ...req.body,
+        quizId: req.params.id,
+      });
+
+      if (!parsed.success) {
+        return res.status(400).json({ error: "Validation error", issues: parsed.error.issues });
+      }
+
+      const question = await storage.createQuestion(parsed.data);
+      return res.status(201).json(question);
+    } catch (error) {
+      console.error("Error creating question:", error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/questions/:id", requireAuth, requireRole("teacher"), async (req: Request, res: Response) => {
+    try {
+      const question = await storage.updateQuestion(req.params.id, req.body);
+      if (!question) return res.status(404).json({ error: "Question not found" });
+      return res.json(question);
+    } catch (error) {
+      console.error("Error updating question:", error);
       return res.status(500).json({ error: "Internal server error" });
     }
   });
@@ -1020,7 +1510,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/topics", requireAuth, requireRole("teacher"), async (req: Request, res: Response) => {
+  app.post("/api/topics", requireAuth, requireRole("teacher"), requireApproved, async (req: Request, res: Response) => {
     try {
       const parsed = insertTopicSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -1034,7 +1524,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/topics/:id", requireAuth, requireRole("teacher"), async (req: Request, res: Response) => {
+  app.patch("/api/topics/:id", requireAuth, requireRole("teacher"), requireApproved, async (req: Request, res: Response) => {
     try {
       const topic = await storage.updateTopic(req.params.id, req.body);
       if (!topic) {
@@ -1061,12 +1551,19 @@ export async function registerRoutes(
   app.get("/api/materials", async (req: Request, res: Response) => {
     try {
       const { boardId, subjectId, topicId, type, status } = req.query;
-      const filters: Record<string, string> = {};
+      const filters: any = {};
       if (boardId && typeof boardId === "string") filters.boardId = boardId;
       if (subjectId && typeof subjectId === "string") filters.subjectId = subjectId;
       if (topicId && typeof topicId === "string") filters.topicId = topicId;
       if (type && typeof type === "string") filters.type = type;
-      if (status && typeof status === "string") filters.status = status;
+
+      // Enforce status filtering for public requests
+      // Only admins and teachers can view non-approved content via this endpoint
+      if (status && typeof status === "string") {
+        filters.status = status;
+      } else {
+        filters.status = "approved";
+      }
 
       const materials = await storage.getMaterialsByFilters(filters);
       return res.json(materials);
@@ -1087,21 +1584,85 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/materials", requireAuth, async (req: Request, res: Response) => {
+  app.post("/api/materials", requireAuth, requireApproved, async (req: Request, res: Response) => {
+    console.log(`[DEBUG] Received material creation request. User: ${req.user?.id}`);
+    console.log(`[DEBUG] Body: ${JSON.stringify(req.body)}`);
     try {
       const parsed = insertMaterialSchema.safeParse(req.body);
       if (!parsed.success) {
+        console.log(`[DEBUG] Validation failed: ${parsed.error.message}`);
         return res.status(400).json({ error: parsed.error.message });
       }
 
-      const material = await storage.createMaterial(parsed.data);
+      // Teachers' materials go to pending status for admin review
+      const status = req.user?.role === "admin" ? "approved" : "pending";
+
+      const material = await storage.createMaterial({
+        ...parsed.data,
+        status,
+        uploaderId: req.user!.id,
+      });
       return res.status(201).json(material);
     } catch (error) {
+      console.error('[ERROR] Material creation failed:', error);
       return res.status(500).json({ error: "Internal server error" });
     }
   });
 
-  app.patch("/api/materials/:id", apiLimiter, requireAuth, async (req: Request, res: Response) => {
+  app.get("/api/teacher/materials", requireAuth, requireApproved, async (req: Request, res: Response) => {
+    try {
+      const { status, type } = req.query;
+      const filters: any = { uploaderId: req.user!.id };
+      if (status && typeof status === "string") filters.status = status;
+      if (type && typeof type === "string") filters.type = type;
+
+      const materials = await storage.getMaterialsByFilters(filters);
+      return res.json(materials);
+    } catch (error) {
+      console.error('Error fetching teacher materials:', error);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/teacher/upload", requireAuth, requireApproved, upload.single('file'), async (req: Request, res: Response) => {
+    console.log(`[DEBUG] Received teacher upload request from user: ${req.user?.id}`);
+    try {
+      if (!req.file) {
+        console.log('[DEBUG] No file provided in upload request');
+        return res.status(400).json({ error: 'No file provided' });
+      }
+      console.log(`[DEBUG] Uploading file: ${req.file.originalname} (${req.file.mimetype}, ${req.file.size} bytes)`);
+
+      // Allow PDF and common images for teacher materials
+      const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+      const validation = validateFile(req.file, allowedTypes);
+      if (!validation.valid) {
+        return res.status(400).json({ error: validation.error });
+      }
+
+      const fileExt = path.extname(req.file.originalname).toLowerCase();
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}${fileExt}`;
+      const objectKey = `teacher-uploads/${req.user!.id}/${fileName}`;
+
+      const uploadResult = await uploadPdf(req.file.buffer, objectKey, req.file.mimetype);
+      if (!uploadResult.success) {
+        return res.status(500).json({ error: uploadResult.error });
+      }
+
+      return res.json({
+        url: uploadResult.publicUrl,
+        objectKey: uploadResult.objectKey,
+        fileName: req.file.originalname,
+        fileSize: req.file.size,
+        mimeType: req.file.mimetype
+      });
+    } catch (error) {
+      console.error('Error in teacher upload:', error);
+      return res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  app.patch("/api/materials/:id", apiLimiter, requireAuth, requireApproved, async (req: Request, res: Response) => {
     try {
       // Fetch existing material first
       const existing = await storage.getMaterial(req.params.id);
@@ -1123,6 +1684,7 @@ export async function registerRoutes(
       return res.status(500).json({ error: "Internal server error" });
     }
   });
+
 
   app.get("/api/quizzes", async (req: Request, res: Response) => {
     try {
@@ -1154,7 +1716,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/quizzes", requireAuth, requireRole("teacher"), async (req: Request, res: Response) => {
+  app.post("/api/quizzes", requireAuth, requireRole("teacher"), requireApproved, async (req: Request, res: Response) => {
     try {
       const parsed = insertQuizSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -1189,7 +1751,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/quizzes/:quizId/questions", requireAuth, requireRole("teacher"), async (req: Request, res: Response) => {
+  app.post("/api/quizzes/:quizId/questions", requireAuth, requireRole("teacher"), requireApproved, async (req: Request, res: Response) => {
     try {
       const questionData = { ...req.body, quizId: req.params.quizId };
       const parsed = insertQuestionSchema.safeParse(questionData);
@@ -1204,7 +1766,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/questions/:id", requireAuth, requireRole("teacher"), async (req: Request, res: Response) => {
+  app.patch("/api/questions/:id", requireAuth, requireRole("teacher"), requireApproved, async (req: Request, res: Response) => {
     try {
       const question = await storage.updateQuestion(req.params.id, req.body);
       if (!question) {
@@ -1216,7 +1778,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/questions/:id", requireAuth, requireRole("teacher"), async (req: Request, res: Response) => {
+  app.delete("/api/questions/:id", requireAuth, requireRole("teacher"), requireApproved, async (req: Request, res: Response) => {
     try {
       const deleted = await storage.deleteQuestion(req.params.id);
       if (!deleted) {
@@ -1304,7 +1866,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/assignments", requireAuth, requireRole("teacher"), async (req: Request, res: Response) => {
+  app.post("/api/assignments", requireAuth, requireRole("teacher"), requireApproved, async (req: Request, res: Response) => {
     try {
       const parsed = insertAssignmentSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -1318,7 +1880,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/assignments/:id", requireAuth, requireRole("teacher"), async (req: Request, res: Response) => {
+  app.patch("/api/assignments/:id", requireAuth, requireRole("teacher"), requireApproved, async (req: Request, res: Response) => {
     try {
       const assignment = await storage.updateAssignment(req.params.id, req.body);
       if (!assignment) {
@@ -1365,7 +1927,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/submissions/:id", requireAuth, requireRole("teacher"), async (req: Request, res: Response) => {
+  app.patch("/api/submissions/:id", requireAuth, requireRole("teacher"), requireApproved, async (req: Request, res: Response) => {
     try {
       const submission = await storage.updateSubmission(req.params.id, req.body);
       if (!submission) {
@@ -1386,7 +1948,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/announcements", requireAuth, requireRole("teacher"), async (req: Request, res: Response) => {
+  app.post("/api/announcements", requireAuth, requireRole("teacher"), requireApproved, async (req: Request, res: Response) => {
     try {
       const parsed = insertAnnouncementSchema.safeParse(req.body);
       if (!parsed.success) {
@@ -1400,7 +1962,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/announcements/:id", requireAuth, requireRole("teacher"), async (req: Request, res: Response) => {
+  app.patch("/api/announcements/:id", requireAuth, requireRole("teacher"), requireApproved, async (req: Request, res: Response) => {
     try {
       const announcement = await storage.updateAnnouncement(req.params.id, req.body);
       if (!announcement) {
@@ -2018,4 +2580,3 @@ export async function registerRoutes(
 
   return httpServer;
 }
-

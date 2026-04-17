@@ -1,4 +1,4 @@
-import { pgTable, text, varchar, integer, boolean, timestamp, pgEnum, jsonb, uniqueIndex, index, customType } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, boolean, timestamp, pgEnum, jsonb, json, uniqueIndex, index, customType } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -20,7 +20,7 @@ export const bytea = customType<{ data: Buffer; driverParam: string | Buffer }>(
 // ENUM TYPES
 // ===========================================
 export const userRoleEnum = pgEnum("user_role", ["student", "teacher", "admin"]);
-export const resourceTypeEnum = pgEnum("resource_type", ["past_paper", "notes", "video", "worksheet"]);
+export const resourceTypeEnum = pgEnum("resource_type", ["past_paper", "notes", "video", "worksheet", "ebook"]);
 export const contentStatusEnum = pgEnum("content_status", ["pending", "approved", "rejected"]);
 export const assignmentStatusEnum = pgEnum("assignment_status", ["pending", "submitted", "graded"]);
 export const quizTypeEnum = pgEnum("quiz_type", ["practice", "mock"]);
@@ -40,9 +40,33 @@ export const users = pgTable("users", {
   boardIds: text("board_ids").array(),
   subjectIds: text("subject_ids").array(),
   isActive: boolean("is_active").notNull().default(true),
+  // Email verification fields
+  isEmailVerified: boolean("is_email_verified").notNull().default(false),
+  emailVerificationToken: text("email_verification_token"),
+  emailVerificationExpires: timestamp("email_verification_expires"),
+  emailVerificationResendCount: integer("email_verification_resend_count").notNull().default(0),
+  lastResentAt: timestamp("last_resent_at"),
+  // Teacher approval fields
+  isApproved: boolean("is_approved").notNull().default(true), // true for non-teachers
+  approvedBy: varchar("approved_by", { length: 36 }), // FK added in migration (self-reference)
+  approvedAt: timestamp("approved_at"),
+  // Username for public profile URL (e.g., examsvalley.com/yasir)
+  username: text("username").unique(),
+  // Profile fields for public display
+  bio: text("bio"),
+  qualifications: text("qualifications").array(),
+  experienceYears: integer("experience_years"),
+  rating: text("rating").default("0"), // Store as text to handle decimal precision simple for now or real
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
   lastLoginAt: timestamp("last_login_at"),
+});
+
+// Session table for connect-pg-simple
+export const sessions = pgTable("session", {
+  sid: varchar("sid").primaryKey(),
+  sess: json("sess").notNull(),
+  expire: timestamp("expire", { precision: 6 }).notNull(),
 });
 
 // ===========================================
@@ -213,6 +237,7 @@ export const materials = pgTable("materials", {
   videoUrl: text("video_url"),
   uploaderId: varchar("uploader_id", { length: 36 }).notNull(),
   status: text("status").notNull().default("pending"),
+  rejectionReason: text("rejection_reason"),
   viewCount: integer("view_count").notNull().default(0),
   downloadCount: integer("download_count").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow(),
@@ -421,6 +446,7 @@ export const mcqQuestions = pgTable("mcq_questions", {
   sourceIdx: index("idx_mcq_questions_source").on(table.source),
   boardSubjectIdx: index("idx_mcq_questions_board_subject").on(table.boardId, table.subjectId),
   verifiedIdx: index("idx_mcq_questions_verified").on(table.isVerified),
+  yearSessionPaperIdx: index("idx_mcq_questions_year_session_paper").on(table.year, table.session, table.paper),
 }));
 
 // MCQ Attempts — individual question-level attempt tracking
@@ -542,6 +568,7 @@ export const tutorRegistrations = pgTable("tutor_registrations", {
   experienceYears: integer("experience_years"),
   bio: text("bio"),
   linkedinUrl: text("linkedin_url"),
+  availableHours: text("available_hours"), // Added for portfolio
 
   // Application Status
   status: contentStatusEnum("status").notNull().default("pending"),
@@ -559,15 +586,68 @@ export const tutorRegistrations = pgTable("tutor_registrations", {
 // ===========================================
 // ZOD SCHEMAS FOR VALIDATION
 // ===========================================
-export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true });
+export const insertUserSchema = createInsertSchema(users).omit({ id: true, createdAt: true }).extend({
+  // Override array fields to accept nullable arrays
+  boardIds: z.array(z.string()).nullable().optional(),
+  subjectIds: z.array(z.string()).nullable().optional(),
+  qualifications: z.array(z.string()).nullable().optional(),
+  // Override new fields to be optional with null defaults
+  username: z.string().nullable().optional(),
+  bio: z.string().nullable().optional(),
+  experienceYears: z.number().int().nullable().optional(),
+  emailVerificationToken: z.string().nullable().optional(),
+  emailVerificationExpires: z.date().nullable().optional(),
+  emailVerificationResendCount: z.number().int().optional(),
+  lastResentAt: z.date().nullable().optional(),
+  rating: z.string().nullable().optional(),
+  approvedAt: z.date().nullable().optional(),
+  isEmailVerified: z.boolean().optional(),
+  isApproved: z.boolean().optional(),
+});
+
+// Override InsertUser to use proper nullable types (Drizzle-Zod array inference is broken)
+export type InsertUser = {
+  email: string;
+  password?: string | null;
+  googleId?: string | null;
+  authProvider?: string;
+  name: string;
+  role?: string;
+  avatar?: string | null;
+  boardIds?: string[] | null;
+  subjectIds?: string[] | null;
+  isActive?: boolean;
+  isEmailVerified?: boolean;
+  emailVerificationToken?: string | null;
+  emailVerificationExpires?: Date | null;
+  isApproved?: boolean;
+  approvedBy?: string | null;
+  approvedAt?: Date | null;
+  username?: string | null;
+  bio?: string | null;
+  qualifications?: string[] | null;
+  experienceYears?: number | null;
+  emailVerificationResendCount?: number;
+  lastResentAt?: Date | null;
+  rating?: string | null;
+  updatedAt?: Date | null;
+  lastLoginAt?: Date | null;
+};
 export const insertBoardSchema = createInsertSchema(boards).omit({ id: true, createdAt: true });
 export const insertSubjectSchema = createInsertSchema(subjects).omit({ id: true, createdAt: true });
 export const insertTopicSchema = createInsertSchema(topics).omit({ id: true, createdAt: true });
-export const insertMaterialSchema = createInsertSchema(materials).omit({ id: true, createdAt: true });
+export const insertMaterialSchema = createInsertSchema(materials).omit({
+  id: true,
+  createdAt: true,
+  uploaderId: true,
+  status: true
+}).extend({
+  rejectionReason: z.string().nullable().optional(),
+});
 export const insertQuizSchema = createInsertSchema(quizzes).omit({ id: true, createdAt: true });
 export const insertQuestionSchema = createInsertSchema(questions).omit({ id: true, createdAt: true });
 export const insertQuizAttemptSchema = createInsertSchema(quizAttempts).omit({ id: true });
-export const insertAssignmentSchema = createInsertSchema(assignments).omit({ id: true, createdAt: true });
+export const insertAssignmentSchema = createInsertSchema(assignments).omit({ id: true, createdAt: true, creatorId: true });
 export const insertSubmissionSchema = createInsertSchema(submissions).omit({ id: true });
 export const insertAnnouncementSchema = createInsertSchema(announcements).omit({ id: true, createdAt: true });
 
@@ -598,6 +678,7 @@ export const insertTutorRegistrationSchema = createInsertSchema(tutorRegistratio
 }).extend({
   subjects: z.array(z.string()).optional(),
   experienceYears: z.number().int().nonnegative().optional(),
+  availableHours: z.string().optional(),
   ipAddress: z.string().optional().nullable(),
   userAgent: z.string().optional().nullable(),
 });
@@ -631,7 +712,8 @@ export const insertMcqTopicStatsSchema = createInsertSchema(mcqTopicStats).omit(
 // TYPE EXPORTS
 // ===========================================
 export type User = typeof users.$inferSelect;
-export type InsertUser = z.infer<typeof insertUserSchema>;
+// InsertUser is manually defined above to work around Drizzle-Zod array inference issues
+// export type InsertUser = z.infer<typeof insertUserSchema>; // ← removed, see manual definition
 export type StudentRegistration = typeof studentRegistrations.$inferSelect;
 export type InsertStudentRegistration = z.infer<typeof insertStudentRegistrationSchema>;
 export type TutorRegistration = typeof tutorRegistrations.$inferSelect;
@@ -692,7 +774,7 @@ export type McqSource = "manual" | "extracted" | "ai_generated";
 export type McqSessionMode = "practice" | "timed" | "exam" | "adaptive";
 
 export type UserRole = "student" | "teacher" | "admin";
-export type ResourceType = "past_paper" | "notes" | "video" | "worksheet";
+export type ResourceType = "past_paper" | "notes" | "video" | "worksheet" | "ebook";
 export type ContentStatus = "pending" | "approved" | "rejected";
 export type AssignmentStatus = "pending" | "submitted" | "graded";
 export type QuizType = "practice" | "mock";
@@ -704,6 +786,7 @@ export const RESOURCE_TYPE_LABELS: Record<ResourceType, string> = {
   notes: "Notes",
   video: "Video",
   worksheet: "Worksheet",
+  ebook: "eBook",
 };
 
 export const CONTENT_STATUS_LABELS: Record<ContentStatus, string> = {
